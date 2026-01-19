@@ -10,6 +10,7 @@ import tippy, { type Instance as TippyInstance } from 'tippy.js';
 import { cn } from '@/lib/utils';
 import { WORD_LIMIT } from '@/lib/constants';
 import { HashtagSuggestionList, type HashtagSuggestionRef } from './hashtag-suggestion';
+import { EditorToolbar } from './editor-toolbar';
 import type { Tag } from '@/types/card';
 
 interface TiptapEditorProps {
@@ -170,8 +171,7 @@ export function TiptapEditor({
     editorProps: {
       attributes: {
         class: cn(
-          'prose prose-sm dark:prose-invert max-w-none min-h-[200px] focus:outline-none',
-          'prose-headings:font-semibold prose-p:my-2',
+          'tiptap min-h-[200px] focus:outline-none',
           className
         ),
       },
@@ -188,7 +188,8 @@ export function TiptapEditor({
 
   return (
     <div className="space-y-2">
-      <div className="rounded-lg border bg-background">
+      <div className="rounded-lg border bg-background overflow-hidden">
+        {editable && <EditorToolbar editor={editor} />}
         <EditorContent editor={editor} className="p-4" />
       </div>
 
