@@ -38,9 +38,6 @@ export function CardItem({ card, tags = [], onDelete, className }: CardItemProps
     locale: zhTW,
   });
 
-  // Get first 100 characters of content for preview
-  const contentPreview = card.content.slice(0, 100) + (card.content.length > 100 ? '...' : '');
-
   return (
     <Card className={cn('group relative transition-shadow hover:shadow-md', className)}>
       <CardHeader className="pb-2">
@@ -105,10 +102,11 @@ export function CardItem({ card, tags = [], onDelete, className }: CardItemProps
 
       <CardContent className="space-y-3">
         {/* Content Preview */}
-        {contentPreview && (
-          <CardDescription className="line-clamp-2 text-sm">
-            {contentPreview}
-          </CardDescription>
+        {card.content && (
+          <CardDescription
+            className="line-clamp-2 text-sm"
+            dangerouslySetInnerHTML={{ __html: card.content }}
+          />
         )}
 
         {/* Tags */}

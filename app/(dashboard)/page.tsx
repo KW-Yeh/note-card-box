@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/header';
 import { QuadrantView } from '@/components/dashboard/quadrant-view';
 import { CardGrid } from '@/components/cards/card-grid';
+import { OnboardingDialog } from '@/components/onboarding/onboarding-dialog';
 import { useCards, useTags, useDB } from '@/contexts';
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { db, isReady } = useDB();
   const { cards, isLoading: cardsLoading, fetchCards } = useCards();
   const { tags, fetchTags } = useTags();
@@ -19,6 +22,10 @@ export default function DashboardPage() {
   }, [isReady, db, fetchCards, fetchTags]);
 
   const recentCards = cards.slice(0, 6);
+
+  const handleOnboardingComplete = () => {
+    router.push('/cards/new');
+  };
 
   return (
     <div className="flex flex-col">
@@ -37,6 +44,9 @@ export default function DashboardPage() {
           <CardGrid cards={recentCards} tags={tags} isLoading={cardsLoading} />
         </section>
       </div>
+
+      {/* Onboarding Dialog for new users */}
+      <OnboardingDialog onComplete={handleOnboardingComplete} />
     </div>
   );
 }
