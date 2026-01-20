@@ -26,8 +26,8 @@ export function LoginButton() {
           </AvatarFallback>
         </Avatar>
         <Button variant="outline" size="sm" onClick={() => signOut()}>
-          <LogOut className="mr-2 h-4 w-4" />
-          登出
+          <LogOut className="h-4 w-4 sm:mr-2" />
+          <span className="hidden sm:inline">登出</span>
         </Button>
       </div>
     );
@@ -35,8 +35,8 @@ export function LoginButton() {
 
   return (
     <Button onClick={() => signIn('google')} size="sm">
-      <LogIn className="mr-2 h-4 w-4" />
-      使用 Google 登入
+      <LogIn className="h-4 w-4 sm:mr-2" />
+      <span className="hidden sm:inline">使用 Google 登入</span>
     </Button>
   );
 }
