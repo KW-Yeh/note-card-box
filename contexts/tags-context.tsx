@@ -1,184 +1,258 @@
-'use client';
+"use client";
 
 import {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  type ReactNode,
-} from 'react';
-import { nanoid } from 'nanoid';
-import { useDB } from './db-context';
-import type { Tag } from '@/types/card';
-import { DEFAULT_TAG_COLORS } from '@/lib/constants';
+	createContext,
+	useContext,
+	useState,
+	useCallback,
+	useEffect,
+	type ReactNode,
+} from "react";
+import { useDB } from "./db-context";
+import { syncService } from "@/lib/sync/sync-service";
+import { generateUUID } from "@/lib/utils";
+import type { Tag } from "@/types/card";
+import { DEFAULT_TAG_COLORS } from "@/lib/constants";
 
 interface TagsContextValue {
-  tags: Tag[];
-  isLoading: boolean;
-  fetchTags: () => Promise<void>;
-  getTag: (id: string) => Promise<Tag | undefined>;
-  getTagByName: (name: string) => Promise<Tag | undefined>;
-  createTag: (name: string, color?: string) => Promise<Tag>;
-  updateTag: (id: string, data: Partial<Tag>) => Promise<Tag>;
-  deleteTag: (id: string) => Promise<void>;
-  getOrCreateTag: (name: string) => Promise<Tag>;
-  searchTags: (query: string) => Promise<Tag[]>;
+	tags: Tag[];
+	isLoading: boolean;
+	fetchTags: () => Promise<void>;
+	getTag: (id: string) => Promise<Tag | undefined>;
+	getTagByName: (name: string) => Promise<Tag | undefined>;
+	createTag: (name: string, color?: string) => Promise<Tag>;
+	updateTag: (id: string, data: Partial<Tag>) => Promise<Tag>;
+	deleteTag: (id: string) => Promise<void>;
+	getOrCreateTag: (name: string) => Promise<Tag>;
+	searchTags: (query: string) => Promise<Tag[]>;
+	setTagsFromCloud: (tags: Tag[]) => void;
 }
 
 const TagsContext = createContext<TagsContextValue | null>(null);
 
-export function TagsProvider({ children }: { children: ReactNode }) {
-  const { db } = useDB();
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+interface TagsProviderProps {
+	children: ReactNode;
+	isAuthenticated?: boolean;
+	isOnline?: boolean;
+}
 
-  const fetchTags = useCallback(async () => {
-    if (!db) return;
-    setIsLoading(true);
+export function TagsProvider({
+	children,
+	isAuthenticated = false,
+	isOnline = true,
+}: TagsProviderProps) {
+	const { db } = useDB();
+	const [tags, setTags] = useState<Tag[]>([]);
+	const [isLoading, setIsLoading] = useState(false);
 
-    try {
-      const result = await db.getAll('tags');
-      setTags(result.sort((a, b) => a.name.localeCompare(b.name)));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [db]);
+	// Helper to queue sync operation
+	const queueSync = useCallback(
+		(action: "create" | "update" | "delete", tag: Tag) => {
+			if (isAuthenticated) {
+				syncService.queueOperation("tag", action, tag.id, tag);
+				if (isOnline) {
+					syncService.processQueue();
+				}
+			}
+		},
+		[isAuthenticated, isOnline],
+	);
 
-  const getTag = useCallback(
-    async (id: string) => {
-      if (!db) return undefined;
-      return db.get('tags', id);
-    },
-    [db]
-  );
+	const fetchTags = useCallback(async () => {
+		if (!db) return;
+		setIsLoading(true);
 
-  const getTagByName = useCallback(
-    async (name: string) => {
-      if (!db) return undefined;
-      return db.getFromIndex('tags', 'by-name', name.toLowerCase());
-    },
-    [db]
-  );
+		try {
+			const result = await db.getAll("tags");
+			const sorted = result.toSorted((a, b) => a.name.localeCompare(b.name));
+			setTags(sorted);
+		} finally {
+			setIsLoading(false);
+		}
+	}, [db]);
 
-  const createTag = useCallback(
-    async (name: string, color?: string): Promise<Tag> => {
-      if (!db) throw new Error('Database not ready');
+	// Subscribe to sync updates
+	useEffect(() => {
+		const unsubscribe = syncService.subscribeToDataUpdates((data) => {
+			if (data.tags && db) {
+				// Refetch tags from IndexedDB when sync completes
+				fetchTags();
+			}
+		});
 
-      const normalizedName = name.toLowerCase().trim();
+		return unsubscribe;
+	}, [db, fetchTags]);
 
-      // Check if tag already exists
-      const existing = await db.getFromIndex('tags', 'by-name', normalizedName);
-      if (existing) {
-        throw new Error('Tag already exists');
-      }
+	// Initial load from IndexedDB when DB is ready
+	useEffect(() => {
+		if (db && tags.length === 0) {
+			fetchTags();
+		}
+	}, [db, tags.length, fetchTags]);
+	const getTag = useCallback(
+		async (id: string) => {
+			if (!db) return undefined;
+			return db.get("tags", id);
+		},
+		[db],
+	);
 
-      // Assign a random color if not provided
-      const tagColor =
-        color || DEFAULT_TAG_COLORS[Math.floor(Math.random() * DEFAULT_TAG_COLORS.length)];
+	const getTagByName = useCallback(
+		async (name: string) => {
+			if (!db) return undefined;
+			return db.getFromIndex("tags", "by-name", name.toLowerCase());
+		},
+		[db],
+	);
 
-      const tag: Tag = {
-        id: nanoid(),
-        name: normalizedName,
-        color: tagColor,
-        createdAt: Date.now(),
-      };
+	const createTag = useCallback(
+		async (name: string, color?: string): Promise<Tag> => {
+			if (!db) throw new Error("Database not ready");
 
-      await db.put('tags', tag);
-      setTags((prev) => [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)));
-      return tag;
-    },
-    [db]
-  );
+			const normalizedName = name.toLowerCase().trim();
 
-  const updateTag = useCallback(
-    async (id: string, data: Partial<Tag>): Promise<Tag> => {
-      if (!db) throw new Error('Database not ready');
+			// Check if tag already exists
+			const existing = await db.getFromIndex("tags", "by-name", normalizedName);
+			if (existing) {
+				throw new Error("Tag already exists");
+			}
 
-      const existing = await db.get('tags', id);
-      if (!existing) throw new Error('Tag not found');
+			// Assign a random color if not provided
+			const tagColor =
+				color ||
+				DEFAULT_TAG_COLORS[
+					Math.floor(Math.random() * DEFAULT_TAG_COLORS.length)
+				];
 
-      const updated: Tag = {
-        ...existing,
-        ...data,
-        id: existing.id,
-        createdAt: existing.createdAt,
-        name: data.name ? data.name.toLowerCase().trim() : existing.name,
-      };
+			const tag: Tag = {
+				id: generateUUID(),
+				name: normalizedName,
+				color: tagColor,
+				createdAt: Date.now(),
+			};
 
-      await db.put('tags', updated);
-      setTags((prev) =>
-        prev.map((t) => (t.id === id ? updated : t)).sort((a, b) => a.name.localeCompare(b.name))
-      );
-      return updated;
-    },
-    [db]
-  );
+			// Save to IndexedDB first
+			await db.put("tags", tag);
+			setTags((prev) =>
+				[...prev, tag].sort((a, b) => a.name.localeCompare(b.name)),
+			);
 
-  const deleteTag = useCallback(
-    async (id: string) => {
-      if (!db) throw new Error('Database not ready');
+			// Queue for cloud sync
+			queueSync("create", tag);
 
-      await db.delete('tags', id);
-      setTags((prev) => prev.filter((t) => t.id !== id));
+			return tag;
+		},
+		[db, queueSync],
+	);
 
-      // Note: Cards that reference this tag will need to be updated
-      // This is handled by the caller
-    },
-    [db]
-  );
+	const updateTag = useCallback(
+		async (id: string, data: Partial<Tag>): Promise<Tag> => {
+			if (!db) throw new Error("Database not ready");
 
-  const getOrCreateTag = useCallback(
-    async (name: string): Promise<Tag> => {
-      if (!db) throw new Error('Database not ready');
+			const existing = await db.get("tags", id);
+			if (!existing) throw new Error("Tag not found");
 
-      const normalizedName = name.toLowerCase().trim();
-      const existing = await db.getFromIndex('tags', 'by-name', normalizedName);
+			const updated: Tag = {
+				...existing,
+				...data,
+				id: existing.id,
+				createdAt: existing.createdAt,
+				name: data.name ? data.name.toLowerCase().trim() : existing.name,
+			};
 
-      if (existing) return existing;
+			await db.put("tags", updated);
+			setTags((prev) =>
+				prev
+					.map((t) => (t.id === id ? updated : t))
+					.sort((a, b) => a.name.localeCompare(b.name)),
+			);
 
-      return createTag(normalizedName);
-    },
-    [db, createTag]
-  );
+			// Queue for cloud sync
+			queueSync("update", updated);
 
-  const searchTags = useCallback(
-    async (query: string): Promise<Tag[]> => {
-      if (!db) return [];
+			return updated;
+		},
+		[db, queueSync],
+	);
 
-      const allTags = await db.getAll('tags');
-      const lowerQuery = query.toLowerCase();
+	const deleteTag = useCallback(
+		async (id: string) => {
+			if (!db) throw new Error("Database not ready");
 
-      return allTags
-        .filter((tag) => tag.name.includes(lowerQuery))
-        .sort((a, b) => a.name.localeCompare(b.name));
-    },
-    [db]
-  );
+			const tag = await db.get("tags", id);
+			if (!tag) throw new Error("Tag not found");
 
-  return (
-    <TagsContext.Provider
-      value={{
-        tags,
-        isLoading,
-        fetchTags,
-        getTag,
-        getTagByName,
-        createTag,
-        updateTag,
-        deleteTag,
-        getOrCreateTag,
-        searchTags,
-      }}
-    >
-      {children}
-    </TagsContext.Provider>
-  );
+			await db.delete("tags", id);
+			setTags((prev) => prev.filter((t) => t.id !== id));
+
+			// Queue for cloud sync
+			queueSync("delete", tag);
+
+			// Note: Cards that reference this tag will need to be updated
+			// This is handled by the caller
+		},
+		[db, queueSync],
+	);
+
+	const getOrCreateTag = useCallback(
+		async (name: string): Promise<Tag> => {
+			if (!db) throw new Error("Database not ready");
+
+			const normalizedName = name.toLowerCase().trim();
+			const existing = await db.getFromIndex("tags", "by-name", normalizedName);
+
+			if (existing) return existing;
+
+			return createTag(normalizedName);
+		},
+		[db, createTag],
+	);
+
+	const searchTags = useCallback(
+		async (query: string): Promise<Tag[]> => {
+			if (!db) return [];
+
+			const allTags = await db.getAll("tags");
+			const lowerQuery = query.toLowerCase();
+
+			return allTags
+				.filter((tag) => tag.name.includes(lowerQuery))
+				.sort((a, b) => a.name.localeCompare(b.name));
+		},
+		[db],
+	);
+
+	// Update tags from cloud sync
+	const setTagsFromCloud = useCallback((cloudTags: Tag[]) => {
+		const sorted = cloudTags.toSorted((a, b) => a.name.localeCompare(b.name));
+		setTags(sorted);
+	}, []);
+
+	return (
+		<TagsContext.Provider
+			value={{
+				tags,
+				isLoading,
+				fetchTags,
+				getTag,
+				getTagByName,
+				createTag,
+				updateTag,
+				deleteTag,
+				getOrCreateTag,
+				searchTags,
+				setTagsFromCloud,
+			}}
+		>
+			{children}
+		</TagsContext.Provider>
+	);
 }
 
 export function useTags() {
-  const context = useContext(TagsContext);
-  if (!context) {
-    throw new Error('useTags must be used within a TagsProvider');
-  }
-  return context;
+	const context = useContext(TagsContext);
+	if (!context) {
+		throw new Error("useTags must be used within a TagsProvider");
+	}
+	return context;
 }

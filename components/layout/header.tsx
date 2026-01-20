@@ -21,6 +21,8 @@ import {
 import { useUI } from '@/contexts';
 import { MobileNav } from './mobile-nav';
 import { OnboardingDialog, ONBOARDING_KEY } from '@/components/onboarding/onboarding-dialog';
+import { LoginButton } from '@/components/auth/login-button';
+import { SyncIndicator } from '@/components/sync/sync-indicator';
 
 interface HeaderProps {
   title?: string;
@@ -89,6 +91,12 @@ export function Header({ title }: HeaderProps) {
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+
+        {/* Sync Indicator */}
+        <SyncIndicator />
+
+        {/* Login Button */}
+        <LoginButton />
 
         {/* New Card Button */}
         <Button asChild size="sm" className="gap-1">
