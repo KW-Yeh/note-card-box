@@ -12,6 +12,8 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { SheetClose } from '@/components/ui/sheet';
+import { Separator } from '@/components/ui/separator';
+import { LoginButton } from '@/components/auth/login-button';
 
 const navItems = [
   { href: '/', label: '儀表板', icon: LayoutDashboard },
@@ -20,7 +22,11 @@ const navItems = [
   { href: '/tags', label: '標籤瀏覽', icon: Tags },
 ];
 
-export function MobileNav() {
+interface MobileNavProps {
+  onClose?: () => void;
+}
+
+export function MobileNav({ onClose }: MobileNavProps) {
   const pathname = usePathname();
 
   return (
@@ -63,6 +69,14 @@ export function MobileNav() {
           );
         })}
       </nav>
+
+      {/* User Auth Section */}
+      <div className="mt-auto">
+        <Separator />
+        <div className="p-4">
+          <LoginButton variant="full" onAction={onClose} />
+        </div>
+      </div>
 
       {/* Footer */}
       <div className="border-t p-4">

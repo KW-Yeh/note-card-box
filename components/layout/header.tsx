@@ -31,6 +31,7 @@ interface HeaderProps {
 export function Header({ title }: HeaderProps) {
   const { isMobile } = useUI();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const handleShowGuide = () => {
     // Temporarily remove the completion flag to show the dialog
@@ -43,7 +44,7 @@ export function Header({ title }: HeaderProps) {
       <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
         {/* Mobile Menu */}
         {isMobile && (
-          <Sheet>
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden">
                 <Menu className="h-5 w-5" />
@@ -54,7 +55,7 @@ export function Header({ title }: HeaderProps) {
               <SheetHeader className="border-b px-4 py-4">
                 <SheetTitle>Note Card Box</SheetTitle>
               </SheetHeader>
-              <MobileNav />
+              <MobileNav onClose={() => setSheetOpen(false)} />
             </SheetContent>
           </Sheet>
         )}
@@ -95,8 +96,8 @@ export function Header({ title }: HeaderProps) {
         {/* Sync Indicator */}
         <SyncIndicator />
 
-        {/* Login Button */}
-        <LoginButton />
+        {/* Login Button - 只在桌面版顯示 */}
+        {!isMobile && <LoginButton />}
 
         {/* New Card Button */}
         <Button asChild size="sm" className="gap-1">
