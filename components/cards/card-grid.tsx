@@ -9,10 +9,11 @@ interface CardGridProps {
   tags: Tag[];
   isLoading?: boolean;
   onDelete?: (id: string) => void;
+  onTogglePublic?: (id: string, isPublic: boolean) => Promise<void>;
   emptyMessage?: string;
 }
 
-export function CardGrid({ cards, tags, isLoading, onDelete, emptyMessage }: CardGridProps) {
+export function CardGrid({ cards, tags, isLoading, onDelete, onTogglePublic, emptyMessage }: CardGridProps) {
   if (isLoading) {
     return (
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -41,7 +42,7 @@ export function CardGrid({ cards, tags, isLoading, onDelete, emptyMessage }: Car
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {cards.map((card) => (
-        <CardItem key={card.id} card={card} tags={tags} onDelete={onDelete} />
+        <CardItem key={card.id} card={card} tags={tags} onDelete={onDelete} onTogglePublic={onTogglePublic} />
       ))}
     </div>
   );

@@ -11,7 +11,7 @@ import { useCards, useTags, useDB } from '@/contexts';
 export default function DashboardPage() {
   const router = useRouter();
   const { db, isReady } = useDB();
-  const { cards, isLoading: cardsLoading, fetchCards } = useCards();
+  const { cards, isLoading: cardsLoading, fetchCards, updateCard } = useCards();
   const { tags, fetchTags } = useTags();
 
   useEffect(() => {
@@ -25,6 +25,10 @@ export default function DashboardPage() {
 
   const handleOnboardingComplete = () => {
     router.push('/cards/new');
+  };
+
+  const handleTogglePublic = async (id: string, isPublic: boolean) => {
+    await updateCard(id, { isPublic });
   };
 
   return (
@@ -41,7 +45,7 @@ export default function DashboardPage() {
         {/* Recent Cards */}
         <section>
           <h2 className="mb-4 text-lg font-semibold">最近編輯</h2>
-          <CardGrid cards={recentCards} tags={tags} isLoading={cardsLoading} />
+          <CardGrid cards={recentCards} tags={tags} isLoading={cardsLoading} onTogglePublic={handleTogglePublic} />
         </section>
       </div>
 

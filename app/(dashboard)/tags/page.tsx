@@ -14,7 +14,7 @@ import type { Tag, Card } from '@/types/card';
 
 export default function TagsPage() {
   const { isReady } = useDB();
-  const { cards, fetchCards, isLoading: cardsLoading } = useCards();
+  const { cards, fetchCards, isLoading: cardsLoading, updateCard } = useCards();
   const { tags, fetchTags, isLoading: tagsLoading } = useTags();
 
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -62,6 +62,10 @@ export default function TagsPage() {
 
   const clearSelection = () => {
     setSelectedTagIds([]);
+  };
+
+  const handleTogglePublic = async (id: string, isPublic: boolean) => {
+    await updateCard(id, { isPublic });
   };
 
   const selectedTags = tags.filter((tag) => selectedTagIds.includes(tag.id));
@@ -178,6 +182,7 @@ export default function TagsPage() {
               cards={filteredCards}
               tags={tags}
               isLoading={cardsLoading}
+              onTogglePublic={handleTogglePublic}
               emptyMessage={
                 selectedTagIds.length > 0
                   ? '沒有同時包含所有選擇標籤的卡片'

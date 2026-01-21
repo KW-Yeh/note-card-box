@@ -17,7 +17,7 @@ function CardsPageContent() {
   const typeParam = searchParams.get('type') as CardType | null;
 
   const { db, isReady } = useDB();
-  const { cards, isLoading, fetchCards, deleteCard } = useCards();
+  const { cards, isLoading, fetchCards, deleteCard, updateCard } = useCards();
   const { tags, fetchTags } = useTags();
 
   const [activeType, setActiveType] = useState<CardType | 'ALL'>(typeParam || 'ALL');
@@ -51,6 +51,10 @@ function CardsPageContent() {
     setActiveType(value as CardType | 'ALL');
   };
 
+  const handleTogglePublic = async (id: string, isPublic: boolean) => {
+    await updateCard(id, { isPublic });
+  };
+
   return (
     <div className="flex flex-col">
       <Header title="所有卡片" />
@@ -69,7 +73,7 @@ function CardsPageContent() {
         </Tabs>
 
         {/* Card Grid */}
-        <CardGrid cards={cards} tags={tags} isLoading={isLoading} onDelete={handleDelete} />
+        <CardGrid cards={cards} tags={tags} isLoading={isLoading} onDelete={handleDelete} onTogglePublic={handleTogglePublic} />
       </div>
     </div>
   );
