@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -25,7 +26,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { useCards, useTags, useLinks, useDB } from '@/contexts';
+import { useCards, useTags, useLinks, useDB, useSession } from '@/contexts';
 import { type Card, type CardType, type RelationType, type Tag, CARD_TYPE_LABELS, RELATION_TYPE_LABELS } from '@/types/card';
 import { TITLE_MAX_LENGTH } from '@/lib/constants';
 import { toast } from 'sonner';
@@ -43,6 +44,7 @@ export default function EditCardPage({ params }: PageProps) {
   const { getCard, updateCard, searchCards } = useCards();
   const { tags, fetchTags, getOrCreateTag } = useTags();
   const { createLink, getLinksForCard, suggestRelatedCards } = useLinks();
+  const { data: session } = useSession();
 
   const [card, setCard] = useState<Card | null>(null);
   const [title, setTitle] = useState('');
@@ -50,6 +52,7 @@ export default function EditCardPage({ params }: PageProps) {
   const [type, setType] = useState<CardType>('INNOVATION');
   const [tagInput, setTagInput] = useState('');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [isPublic, setIsPublic] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -83,6 +86,7 @@ export default function EditCardPage({ params }: PageProps) {
         setContent(cardData.content);
         setType(cardData.type);
         setSelectedTagIds(cardData.tagIds);
+        setIsPublic(cardData.isPublic);
 
         // Load existing links
         const links = await getLinksForCard(id);
@@ -117,6 +121,7 @@ export default function EditCardPage({ params }: PageProps) {
         status: type === 'PERMANENT' ? 'ARCHIVED' : card.status,
         wordCount: content.replace(/<[^>]*>/g, '').length,
         tagIds: selectedTagIds,
+        isPublic,
       });
 
       toast.success('卡片已更新');
@@ -315,6 +320,28 @@ export default function EditCardPage({ params }: PageProps) {
               </div>
             )}
           </div>
+
+          {/* Share Settings */}
+          {session?.user?.id && (
+            <div className="space-y-2">
+              <Label>分享設定</Label>
+              <div className="flex items-center gap-3 rounded-lg border p-4">
+                <Switch
+                  id="public-switch"
+                  checked={isPublic}
+                  onCheckedChange={setIsPublic}
+                />
+                <Label htmlFor="public-switch" className="cursor-pointer">
+                  {isPublic ? '公開分享' : '私人卡片'}
+                </Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {isPublic
+                  ? '儲存後，任何人都可以透過分享連結查看此卡片'
+                  : '只有你可以看到這張卡片'}
+              </p>
+            </div>
+          )}
 
           {/* Content */}
           <div className="space-y-2">

@@ -7,9 +7,13 @@ const pool = new Pool({
 	database: process.env.AURORA_POSTGRESQL_DB_NAME || "postgres",
 	user: process.env.AURORA_POSTGRESQL_USERNAME,
 	password: process.env.AURORA_POSTGRESQL_PASSWORD,
-	ssl: {
-		rejectUnauthorized: false, // 對於 AWS RDS/Aurora，可以設為 false
-	},
+	// 只在生產環境使用 SSL (本地開發不使用)
+	ssl:
+		process.env.NODE_ENV === "production"
+			? {
+					rejectUnauthorized: false, // 對於 AWS RDS/Aurora，可以設為 false
+				}
+			: false,
 	max: 10,
 	idleTimeoutMillis: 30000,
 });
@@ -23,9 +27,13 @@ export const readPool = new Pool({
 	database: process.env.AURORA_POSTGRESQL_DB_NAME || "postgres",
 	user: process.env.AURORA_POSTGRESQL_USERNAME,
 	password: process.env.AURORA_POSTGRESQL_PASSWORD,
-	ssl: {
-		rejectUnauthorized: false, // 對於 AWS RDS/Aurora，可以設為 false
-	},
+	// 只在生產環境使用 SSL (本地開發不使用)
+	ssl:
+		process.env.NODE_ENV === "production"
+			? {
+					rejectUnauthorized: false, // 對於 AWS RDS/Aurora，可以設為 false
+				}
+			: false,
 	max: 10,
 	idleTimeoutMillis: 30000,
 });

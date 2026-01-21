@@ -9,6 +9,7 @@ import { zhTW } from 'date-fns/locale';
 import { Header } from '@/components/layout/header';
 import { CardTypeBadge } from '@/components/cards/card-type-badge';
 import { CardStatusBanner } from '@/components/cards/card-status-banner';
+import { ShareDialog } from '@/components/cards/share-dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -22,7 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { useCards, useTags, useLinks, useDB } from '@/contexts';
+import { useCards, useTags, useLinks, useDB, useSession } from '@/contexts';
 import { type Card, type Tag, type Link as LinkType, RELATION_TYPE_LABELS } from '@/types/card';
 import { toast } from 'sonner';
 
@@ -34,9 +35,10 @@ export default function CardDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
   const { isReady } = useDB();
-  const { getCard, deleteCard, promoteCard } = useCards();
+  const { getCard, updateCard, deleteCard, promoteCard } = useCards();
   const { tags, fetchTags } = useTags();
   const { getLinksForCard } = useLinks();
+  const { data: session } = useSession();
 
   const [card, setCard] = useState<Card | null>(null);
   const [cardLinks, setCardLinks] = useState<{ from: LinkType[]; to: LinkType[] }>({
@@ -45,6 +47,9 @@ export default function CardDetailPage({ params }: PageProps) {
   });
   const [linkedCards, setLinkedCards] = useState<Card[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+
+  const isSynced = !!session?.user?.id;
 
   useEffect(() => {
     if (isReady) {
@@ -98,6 +103,23 @@ export default function CardDetailPage({ params }: PageProps) {
     }
   };
 
+  const handleTogglePublic = async (isPublic: boolean) => {
+    if (!card) return;
+
+    const response = await fetch(`/api/cards/${card.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isPublic, updatedAt: Date.now() }),
+    });
+
+    if (!response.ok) {
+      throw new Error('更新失敗');
+    }
+
+    const updated = await updateCard(card.id, { isPublic });
+    setCard(updated);
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -149,6 +171,15 @@ export default function CardDetailPage({ params }: PageProps) {
               </div>
 
               <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsShareDialogOpen(true)}
+                >
+                  <Share2 className="mr-2 h-4 w-4" />
+                  分享
+                </Button>
+
                 <Button variant="outline" size="sm" asChild>
                   <Link href={`/cards/${id}/edit`}>
                     <Pencil className="mr-2 h-4 w-4" />
@@ -267,6 +298,16 @@ export default function CardDetailPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+
+      {card && (
+        <ShareDialog
+          card={card}
+          open={isShareDialogOpen}
+          onOpenChange={setIsShareDialogOpen}
+          onTogglePublic={handleTogglePublic}
+          isSynced={isSynced}
+        />
+      )}
     </div>
   );
 }
