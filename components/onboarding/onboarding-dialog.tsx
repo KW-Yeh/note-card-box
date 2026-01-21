@@ -287,7 +287,7 @@ export function OnboardingDialog({
 				<div className="flex justify-center gap-1.5">
 					{steps.map((_, index) => (
 						<button
-							key={`${step.title}`}
+							key={index}
 							onClick={() => setCurrentStep(index)}
 							className={`h-1.5 rounded-full transition-all ${
 								index === currentStep
