@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -45,16 +45,19 @@ export function TagManageDialog({
   onUpdate,
   onDelete,
 }: TagManageDialogProps) {
-  const [name, setName] = useState(tag?.name || '');
-  const [color, setColor] = useState(tag?.color || DEFAULT_TAG_COLORS[0]);
+  const [name, setName] = useState('');
+  const [color, setColor] = useState(DEFAULT_TAG_COLORS[0]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Reset form when tag changes
-  const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen && tag) {
+  // Sync form state when tag changes or dialog opens
+  useEffect(() => {
+    if (tag && open) {
       setName(tag.name);
       setColor(tag.color || DEFAULT_TAG_COLORS[0]);
     }
+  }, [tag, open]);
+
+  const handleOpenChange = (newOpen: boolean) => {
     onOpenChange(newOpen);
   };
 
