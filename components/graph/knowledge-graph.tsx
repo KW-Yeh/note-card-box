@@ -316,8 +316,8 @@ export function KnowledgeGraph({
 					</div>
 				</Panel>
 
-				{/* Stats Panel */}
-				<Panel position="top-right">
+				{/* Stats Panel - hidden on mobile to avoid overlap with filter buttons */}
+				<Panel position="top-right" className="hidden sm:block">
 					<div className="rounded-lg bg-background/80 p-3 backdrop-blur-sm">
 						<div className="space-y-1 text-sm">
 							<p>
@@ -329,6 +329,17 @@ export function KnowledgeGraph({
 								<span className="font-medium">{edges.length}</span>
 							</p>
 						</div>
+					</div>
+				</Panel>
+
+				{/* Stats Panel for mobile - positioned at bottom right */}
+				<Panel position="bottom-right" className="block sm:hidden">
+					<div className="rounded-lg bg-background/80 p-2 backdrop-blur-sm text-xs">
+						<span className="text-muted-foreground">卡片：</span>
+						<span className="font-medium">{filteredCards.length}</span>
+						<span className="mx-2 text-muted-foreground">|</span>
+						<span className="text-muted-foreground">連結：</span>
+						<span className="font-medium">{edges.length}</span>
 					</div>
 				</Panel>
 
