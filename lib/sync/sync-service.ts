@@ -292,54 +292,46 @@ export class SyncService {
 		return { localOnlyCards, localOnlyTags, localOnlyLinks };
 	}
 
-	// Helper to push a single item to cloud
-	private async pushItemToCloud(
+	// Helper to push items in batch to cloud
+	private async pushBatchToCloud<T extends Card | Tag | Link>(
 		entity: EntityType,
-		item: Card | Tag | Link,
-	): Promise<boolean> {
+		items: T[],
+	): Promise<void> {
+		if (items.length === 0) return;
+
 		try {
-			const response = await fetch(`/api/${entity}s`, {
+			const response = await fetch(`/api/${entity}s/batch`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(item),
+				body: JSON.stringify(items),
 			});
 
-			// If item already exists (409 Conflict), consider it success
-			if (response.ok || response.status === 409) {
-				return true;
+			if (!response.ok) {
+				throw new Error(`Failed to batch push ${entity}s: ${response.status}`);
 			}
-
-			throw new Error(
-				`Failed to push ${entity} ${item.id}: ${response.status}`,
-			);
 		} catch (error) {
-			console.error(`Error pushing ${entity} ${item.id}:`, error);
-			// Queue it for retry
-			this.queueOperation(entity, "create", item.id, item);
-			return false;
+			console.error(`Error batch pushing ${entity}s:`, error);
+			// Queue individual items for retry
+			for (const item of items) {
+				this.queueOperation(entity, "create", item.id, item);
+			}
 		}
 	}
 
-	// Push local-only items to cloud
+	// Push local-only items to cloud using batch endpoints
 	async pushLocalOnlyItems(
 		localOnlyCards: Card[],
 		localOnlyTags: Tag[],
 		localOnlyLinks: Link[],
 	): Promise<void> {
 		// Push tags first (cards reference them)
-		for (const tag of localOnlyTags) {
-			await this.pushItemToCloud("tag", tag);
-		}
+		await this.pushBatchToCloud("tag", localOnlyTags);
 
 		// Push cards
-		for (const card of localOnlyCards) {
-			await this.pushItemToCloud("card", card);
-		}
+		await this.pushBatchToCloud("card", localOnlyCards);
 
 		// Push links
-		for (const link of localOnlyLinks) {
-			await this.pushItemToCloud("link", link);
-		}
+		await this.pushBatchToCloud("link", localOnlyLinks);
 	}
 
 	// Full sync: push pending changes, then pull from cloud
@@ -384,32 +376,14 @@ export class SyncService {
 			this.db.getAll("links"),
 		]);
 
-		// Push tags first
-		for (const tag of tags) {
-			await fetch("/api/tags", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(tag),
-			});
-		}
+		// Push tags first (cards reference them)
+		await this.pushBatchToCloud("tag", tags);
 
 		// Push cards
-		for (const card of cards) {
-			await fetch("/api/cards", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(card),
-			});
-		}
+		await this.pushBatchToCloud("card", cards);
 
 		// Push links
-		for (const link of links) {
-			await fetch("/api/links", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(link),
-			});
-		}
+		await this.pushBatchToCloud("link", links);
 
 		localStorage.setItem(LAST_SYNC_KEY, Date.now().toString());
 		this.notifyListeners();
