@@ -3,22 +3,26 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { CardGrid } from '@/components/cards/card-grid';
+import { TagManageDialog } from '@/components/tags/tag-manage-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCards, useTags, useDB } from '@/contexts';
-import { X, Search, Tag as TagIcon } from 'lucide-react';
-import type { Tag, Card } from '@/types/card';
+import { X, Search, Tag as TagIcon, Settings } from 'lucide-react';
+import { toast } from 'sonner';
+import type { Tag } from '@/types/card';
 
 export default function TagsPage() {
   const { isReady } = useDB();
   const { cards, fetchCards, isLoading: cardsLoading, updateCard } = useCards();
-  const { tags, fetchTags, isLoading: tagsLoading } = useTags();
+  const { tags, fetchTags, updateTag, deleteTag, isLoading: tagsLoading } = useTags();
 
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [editingTag, setEditingTag] = useState<Tag | null>(null);
+  const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
 
   useEffect(() => {
     if (isReady) {
@@ -66,6 +70,35 @@ export default function TagsPage() {
 
   const handleTogglePublic = async (id: string, isPublic: boolean) => {
     await updateCard(id, { isPublic });
+  };
+
+  const handleEditTag = (tag: Tag) => {
+    setEditingTag(tag);
+    setIsManageDialogOpen(true);
+  };
+
+  const handleUpdateTag = async (id: string, data: { name?: string; color?: string }) => {
+    try {
+      await updateTag(id, data);
+      toast.success('標籤已更新');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '更新失敗');
+      throw error;
+    }
+  };
+
+  const handleDeleteTag = async (id: string) => {
+    try {
+      // Remove from selection if selected
+      if (selectedTagIds.includes(id)) {
+        setSelectedTagIds((prev) => prev.filter((tagId) => tagId !== id));
+      }
+      await deleteTag(id);
+      toast.success('標籤已刪除');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '刪除失敗');
+      throw error;
+    }
   };
 
   const selectedTags = tags.filter((tag) => selectedTagIds.includes(tag.id));
@@ -145,21 +178,32 @@ export default function TagsPage() {
                     const cardCount = tagCardCounts[tag.id] || 0;
 
                     return (
-                      <Badge
-                        key={tag.id}
-                        variant={isSelected ? 'default' : 'outline'}
-                        className="cursor-pointer whitespace-nowrap"
-                        style={{
-                          backgroundColor: isSelected
-                            ? tag.color || undefined
-                            : `${tag.color}20` || undefined,
-                          borderColor: tag.color || undefined,
-                        }}
-                        onClick={() => handleTagClick(tag.id)}
-                      >
-                        #{tag.name}
-                        <span className="ml-1 opacity-60">({cardCount})</span>
-                      </Badge>
+                      <div key={tag.id} className="group relative inline-flex items-center">
+                        <Badge
+                          variant={isSelected ? 'default' : 'outline'}
+                          className="cursor-pointer whitespace-nowrap pr-7"
+                          style={{
+                            backgroundColor: isSelected
+                              ? tag.color || undefined
+                              : tag.color ? `${tag.color}20` : undefined,
+                            borderColor: tag.color || undefined,
+                          }}
+                          onClick={() => handleTagClick(tag.id)}
+                        >
+                          #{tag.name}
+                          <span className="ml-1 opacity-60">({cardCount})</span>
+                        </Badge>
+                        <button
+                          type="button"
+                          className="absolute right-1 flex h-5 w-5 items-center justify-center rounded-full opacity-0 transition-opacity hover:bg-black/10 group-hover:opacity-100 dark:hover:bg-white/10"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditTag(tag);
+                          }}
+                        >
+                          <Settings className="h-3 w-3" />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -192,6 +236,16 @@ export default function TagsPage() {
           </div>
         </div>
       </div>
+
+      {/* Tag Management Dialog */}
+      <TagManageDialog
+        tag={editingTag}
+        cardCount={editingTag ? tagCardCounts[editingTag.id] || 0 : 0}
+        open={isManageDialogOpen}
+        onOpenChange={setIsManageDialogOpen}
+        onUpdate={handleUpdateTag}
+        onDelete={handleDeleteTag}
+      />
     </div>
   );
 }
