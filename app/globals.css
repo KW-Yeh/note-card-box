@@ -242,6 +242,35 @@
 }
 
 /* Prose Styles (for card content display) */
+.prose {
+  overflow-y: auto;
+}
+
+/* Custom scrollbar for prose content */
+.prose::-webkit-scrollbar {
+  width: 6px;
+}
+
+.prose::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.prose::-webkit-scrollbar-thumb {
+  background-color: var(--muted-foreground);
+  border-radius: 3px;
+  opacity: 0.5;
+}
+
+.prose::-webkit-scrollbar-thumb:hover {
+  background-color: var(--foreground);
+}
+
+/* Firefox scrollbar */
+.prose {
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted-foreground) transparent;
+}
+
 .prose p {
   margin: 0.5em 0;
 }

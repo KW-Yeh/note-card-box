@@ -122,7 +122,7 @@ export default async function SharedCardPage({ params }: PageProps) {
           )}
 
           <div
-            className="prose prose-sm dark:prose-invert max-w-none rounded-lg border bg-card p-6"
+            className="prose prose-sm dark:prose-invert max-w-none max-h-[70vh] rounded-lg border bg-card p-6"
             dangerouslySetInnerHTML={{ __html: card.content || '<p class="text-muted-foreground">無內容</p>' }}
           />
         </article>

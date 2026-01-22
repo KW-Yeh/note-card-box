@@ -90,7 +90,7 @@ export default function GraphPage() {
 						<DrawerHeader>
 							<DrawerTitle>卡片詳情</DrawerTitle>
 						</DrawerHeader>
-						<div className="p-4">
+						<div className="p-4 mb-4">
 							<DetailContent
 								selectedCard={selectedCard}
 								selectedCardTags={selectedCardTags}
@@ -162,7 +162,7 @@ const DetailContent = ({
 			)}
 
 			<div
-				className="prose prose-sm dark:prose-invert max-w-none rounded-lg border bg-muted/50 p-4"
+				className="prose prose-sm dark:prose-invert max-w-none max-h-64 rounded-lg border bg-muted/50 p-4"
 				dangerouslySetInnerHTML={{
 					__html: selectedCard.content
 						? selectedCard.content.slice(0, 500) +
