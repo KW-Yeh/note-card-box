@@ -20,6 +20,8 @@ interface SyncContextValue {
   isAuthenticated: boolean;
   sync: (forceFullPull?: boolean) => Promise<void>;
   pushAll: () => Promise<void>;
+  clearAndResync: () => Promise<void>;
+  forceOverwriteCloud: () => Promise<void>;
   queueCardSync: (action: 'create' | 'update' | 'delete', card: Card) => void;
   queueTagSync: (action: 'create' | 'update' | 'delete', tag: Tag) => void;
   queueLinkSync: (action: 'create' | 'delete', link: Link) => void;
@@ -113,6 +115,22 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     await syncService.pushAllToCloud();
   }, [isAuthenticated]);
 
+  // Clear local data and re-sync from cloud
+  const clearAndResync = useCallback(async () => {
+    if (!isAuthenticated) {
+      throw new Error('Not authenticated');
+    }
+    await syncService.clearAndResyncFromCloud();
+  }, [isAuthenticated]);
+
+  // Force overwrite cloud with local data
+  const forceOverwriteCloud = useCallback(async () => {
+    if (!isAuthenticated) {
+      throw new Error('Not authenticated');
+    }
+    await syncService.forceOverwriteCloud();
+  }, [isAuthenticated]);
+
   // Queue operations for sync
   const queueCardSync = useCallback(
     (action: 'create' | 'update' | 'delete', card: Card) => {
@@ -159,6 +177,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         isAuthenticated,
         sync,
         pushAll,
+        clearAndResync,
+        forceOverwriteCloud,
         queueCardSync,
         queueTagSync,
         queueLinkSync,

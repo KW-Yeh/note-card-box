@@ -1,16 +1,31 @@
 'use client';
 
+import { useState } from 'react';
 import { useSync } from '@/contexts';
-import { Cloud, CloudOff, RefreshCw, Check, AlertCircle } from 'lucide-react';
+import { Cloud, CloudOff, RefreshCw, Check, AlertCircle, Trash2, Upload } from 'lucide-react';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { toast } from 'sonner';
 
 export function SyncIndicator() {
-  const { status, isOnline, isAuthenticated, sync } = useSync();
+  const { status, isOnline, isAuthenticated, sync, clearAndResync, forceOverwriteCloud } = useSync();
+  const [showClearDialog, setShowClearDialog] = useState(false);
+  const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
 
   // Don't show anything if not authenticated
   if (!isAuthenticated) {
@@ -53,22 +68,50 @@ export function SyncIndicator() {
 
   const { icon, text, description } = getStatusInfo();
 
-  const handleClick = () => {
+  const handleSync = async () => {
     if (isOnline && !status.isSyncing) {
-      // Force full pull when manually clicking to get latest data from other devices
-      sync(true);
+      try {
+        await sync(true);
+        toast.success('同步完成');
+      } catch {
+        toast.error('同步失敗');
+      }
+    }
+  };
+
+  const handleClearAndResync = async () => {
+    setShowClearDialog(false);
+    if (isOnline && !status.isSyncing) {
+      try {
+        await clearAndResync();
+        toast.success('已清除本機資料並重新同步');
+      } catch {
+        toast.error('重新同步失敗');
+      }
+    }
+  };
+
+  const handleOverwriteCloud = async () => {
+    setShowOverwriteDialog(false);
+    if (isOnline && !status.isSyncing) {
+      try {
+        await forceOverwriteCloud();
+        toast.success('已將本機資料覆蓋至雲端');
+      } catch {
+        toast.error('覆蓋雲端資料失敗');
+      }
     }
   };
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <button
             type="button"
-            onClick={handleClick}
             disabled={!isOnline || status.isSyncing}
             className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted/50 transition-colors disabled:cursor-not-allowed"
+            title={description}
           >
             {isOnline ? (
               <Cloud className="h-4 w-4 text-muted-foreground" />
@@ -80,11 +123,65 @@ export function SyncIndicator() {
               {text}
             </span>
           </button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>{description}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={handleSync} disabled={!isOnline || status.isSyncing}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            立即同步
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setShowClearDialog(true)}
+            disabled={!isOnline || status.isSyncing}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            清除本機資料並重新同步
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => setShowOverwriteDialog(true)}
+            disabled={!isOnline || status.isSyncing}
+            className="text-destructive focus:text-destructive"
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            以本機資料覆蓋雲端
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定要清除本機資料嗎？</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作會清除所有本機資料（包含尚未同步的變更），並從雲端重新下載所有資料。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearAndResync}>
+              確定清除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showOverwriteDialog} onOpenChange={setShowOverwriteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>確定要以本機資料覆蓋雲端嗎？</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作會刪除雲端所有資料，並以本機資料取代。其他裝置的未同步變更將會遺失。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleOverwriteCloud}>
+              確定覆蓋
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

@@ -396,6 +396,121 @@ export class SyncService {
 		localStorage.removeItem(LAST_SYNC_KEY);
 		this.notifyListeners();
 	}
+
+	// Force push all local data to cloud, replacing cloud data
+	async forceOverwriteCloud(): Promise<void> {
+		if (!this.db) throw new Error("Database not initialized");
+
+		this.isSyncing = true;
+		this.notifyListeners();
+
+		try {
+			// Clear sync queue first
+			localStorage.removeItem(SYNC_QUEUE_KEY);
+
+			// Get all local data
+			const [cards, tags, links] = await Promise.all([
+				this.db.getAll("cards"),
+				this.db.getAll("tags"),
+				this.db.getAll("links"),
+			]);
+
+			// Delete all cloud data first
+			const deleteRes = await fetch("/api/sync/reset", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+			});
+
+			if (!deleteRes.ok) {
+				throw new Error("Failed to reset cloud data");
+			}
+
+			// Push all local data using batch endpoints
+			await this.pushBatchToCloud("tag", tags);
+			await this.pushBatchToCloud("card", cards);
+			await this.pushBatchToCloud("link", links);
+
+			// Update last sync timestamp
+			localStorage.setItem(LAST_SYNC_KEY, Date.now().toString());
+			this.notifyListeners();
+		} finally {
+			this.isSyncing = false;
+			this.notifyListeners();
+		}
+	}
+
+	// Clear all local data and re-sync from cloud
+	async clearAndResyncFromCloud(): Promise<{
+		cards: Card[];
+		tags: Tag[];
+		links: Link[];
+	}> {
+		if (!this.db) throw new Error("Database not initialized");
+
+		this.isSyncing = true;
+		this.notifyListeners();
+
+		try {
+			// Clear sync queue first (discard pending local changes)
+			localStorage.removeItem(SYNC_QUEUE_KEY);
+			localStorage.removeItem(LAST_SYNC_KEY);
+
+			// Clear all data from IndexedDB
+			const tx = this.db.transaction(["cards", "tags", "links"], "readwrite");
+			await Promise.all([
+				tx.objectStore("cards").clear(),
+				tx.objectStore("tags").clear(),
+				tx.objectStore("links").clear(),
+				tx.done,
+			]);
+
+			// Fetch all data from cloud (no since parameter)
+			const [cardsRes, tagsRes, linksRes] = await Promise.all([
+				fetch("/api/cards", { cache: "no-store" }),
+				fetch("/api/tags", { cache: "no-store" }),
+				fetch("/api/links", { cache: "no-store" }),
+			]);
+
+			if (!cardsRes.ok || !tagsRes.ok || !linksRes.ok) {
+				throw new Error("Failed to fetch from cloud");
+			}
+
+			const [cards, tags, links] = await Promise.all([
+				cardsRes.json() as Promise<Card[]>,
+				tagsRes.json() as Promise<Tag[]>,
+				linksRes.json() as Promise<Link[]>,
+			]);
+
+			// Write all data to IndexedDB
+			const writeTx = this.db.transaction(["cards", "tags", "links"], "readwrite");
+
+			for (const tag of tags) {
+				await writeTx.objectStore("tags").put(tag);
+			}
+			for (const card of cards) {
+				await writeTx.objectStore("cards").put(card);
+			}
+			for (const link of links) {
+				await writeTx.objectStore("links").put(link);
+			}
+			await writeTx.done;
+
+			// Update last sync timestamp
+			localStorage.setItem(LAST_SYNC_KEY, Date.now().toString());
+
+			// Notify listeners about data updates
+			this.notifyDataUpdate({
+				cards,
+				tags,
+				links,
+			});
+
+			return { cards, tags, links };
+		} finally {
+			this.isSyncing = false;
+			this.notifyListeners();
+		}
+	}
 }
 
 // Singleton instance
