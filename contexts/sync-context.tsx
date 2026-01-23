@@ -18,7 +18,7 @@ interface SyncContextValue {
   status: SyncStatus;
   isOnline: boolean;
   isAuthenticated: boolean;
-  sync: () => Promise<void>;
+  sync: (forceFullPull?: boolean) => Promise<void>;
   pushAll: () => Promise<void>;
   queueCardSync: (action: 'create' | 'update' | 'delete', card: Card) => void;
   queueTagSync: (action: 'create' | 'update' | 'delete', tag: Tag) => void;
@@ -98,11 +98,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, isOnline, isReady]);
 
   // Manual sync trigger
-  const sync = useCallback(async () => {
+  const sync = useCallback(async (forceFullPull = false) => {
     if (!isAuthenticated) {
       throw new Error('Not authenticated');
     }
-    await syncService.fullSync();
+    await syncService.fullSync(forceFullPull);
   }, [isAuthenticated]);
 
   // Push all local data to cloud

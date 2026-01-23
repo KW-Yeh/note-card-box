@@ -55,7 +55,8 @@ export function SyncIndicator() {
 
   const handleClick = () => {
     if (isOnline && !status.isSyncing) {
-      sync();
+      // Force full pull when manually clicking to get latest data from other devices
+      sync(true);
     }
   };
 

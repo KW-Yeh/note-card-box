@@ -192,13 +192,13 @@ export class SyncService {
 	}
 
 	// Pull data from cloud and merge with local
-	async pullFromCloud(): Promise<{
+	async pullFromCloud(forceFullPull = false): Promise<{
 		cards: Card[];
 		tags: Tag[];
 		links: Link[];
 	}> {
 		const lastSync = localStorage.getItem(LAST_SYNC_KEY);
-		const since = lastSync || "";
+		const since = forceFullPull ? "" : (lastSync || "");
 
 		const cardsUrl = since ? `/api/cards?since=${since}` : "/api/cards";
 		const tagsUrl = since ? `/api/tags?since=${since}` : "/api/tags";
@@ -228,7 +228,7 @@ export class SyncService {
 		cards: Card[];
 		tags: Tag[];
 		links: Link[];
-	}): Promise<{
+	}, forceNotify = false): Promise<{
 		localOnlyCards: Card[];
 		localOnlyTags: Tag[];
 		localOnlyLinks: Link[];
@@ -283,10 +283,11 @@ export class SyncService {
 		this.notifyListeners();
 
 		// Notify listeners about data updates
+		// When forceNotify is true, always notify even if no new data (to trigger UI refresh)
 		this.notifyDataUpdate({
-			cards: cards.length > 0 ? cards : undefined,
-			tags: tags.length > 0 ? tags : undefined,
-			links: links.length > 0 ? links : undefined,
+			cards: cards.length > 0 || forceNotify ? cards : undefined,
+			tags: tags.length > 0 || forceNotify ? tags : undefined,
+			links: links.length > 0 || forceNotify ? links : undefined,
 		});
 
 		return { localOnlyCards, localOnlyTags, localOnlyLinks };
@@ -335,7 +336,7 @@ export class SyncService {
 	}
 
 	// Full sync: push pending changes, then pull from cloud
-	async fullSync(): Promise<{
+	async fullSync(forceFullPull = false): Promise<{
 		cards: Card[];
 		tags: Tag[];
 		links: Link[];
@@ -344,11 +345,11 @@ export class SyncService {
 		await this.processQueue();
 
 		// Then pull from cloud
-		const cloudData = await this.pullFromCloud();
+		const cloudData = await this.pullFromCloud(forceFullPull);
 
 		// Merge cloud data into IndexedDB and detect local-only items
 		const { localOnlyCards, localOnlyTags, localOnlyLinks } =
-			await this.mergeCloudData(cloudData);
+			await this.mergeCloudData(cloudData, forceFullPull);
 
 		// Push local-only items to cloud (items that exist locally but not in cloud)
 		if (
