@@ -150,13 +150,22 @@ export async function POST(request: NextRequest) {
       await client.query('DELETE FROM card_tags WHERE card_id = $1', [id]);
 
       if (tagIds && tagIds.length > 0) {
-        const tagValues = tagIds
-          .map((_: string, i: number) => `($1, $${i + 2})`)
-          .join(', ');
-        await client.query(
-          `INSERT INTO card_tags (card_id, tag_id) VALUES ${tagValues}`,
-          [id, ...tagIds]
+        // Filter out non-existent tags to avoid foreign key constraint errors
+        const existingTags = await client.query(
+          `SELECT id FROM tags WHERE id = ANY($1) AND user_id = $2`,
+          [tagIds, session.user.id]
         );
+        const validTagIds = existingTags.rows.map((row) => row.id);
+
+        if (validTagIds.length > 0) {
+          const tagValues = validTagIds
+            .map((_: string, i: number) => `($1, $${i + 2})`)
+            .join(', ');
+          await client.query(
+            `INSERT INTO card_tags (card_id, tag_id) VALUES ${tagValues}`,
+            [id, ...validTagIds]
+          );
+        }
       }
 
       await client.query('COMMIT');

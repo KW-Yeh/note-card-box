@@ -116,16 +116,26 @@ export async function PUT(
       }
 
       // Update card_tags if provided
+      let validTagIds: string[] = [];
       if (tagIds !== undefined) {
         await client.query('DELETE FROM card_tags WHERE card_id = $1', [id]);
         if (tagIds.length > 0) {
-          const tagValues = tagIds
-            .map((_: string, i: number) => `($1, $${i + 2})`)
-            .join(', ');
-          await client.query(
-            `INSERT INTO card_tags (card_id, tag_id) VALUES ${tagValues}`,
-            [id, ...tagIds]
+          // Filter out non-existent tags to avoid foreign key constraint errors
+          const existingTags = await client.query(
+            `SELECT id FROM tags WHERE id = ANY($1) AND user_id = $2`,
+            [tagIds, session.user.id]
           );
+          validTagIds = existingTags.rows.map((row: { id: string }) => row.id);
+
+          if (validTagIds.length > 0) {
+            const tagValues = validTagIds
+              .map((_: string, i: number) => `($1, $${i + 2})`)
+              .join(', ');
+            await client.query(
+              `INSERT INTO card_tags (card_id, tag_id) VALUES ${tagValues}`,
+              [id, ...validTagIds]
+            );
+          }
         }
       }
 
@@ -141,7 +151,7 @@ export async function PUT(
         status: card.status,
         isPublic: card.is_public,
         wordCount: card.word_count,
-        tagIds: tagIds || [],
+        tagIds: validTagIds,
         createdAt: new Date(card.created_at).getTime(),
         updatedAt: new Date(card.updated_at).getTime(),
         promotedAt: card.promoted_at
