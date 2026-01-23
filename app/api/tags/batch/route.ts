@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import pool from '@/lib/db/postgres';
 
+export const dynamic = 'force-dynamic';
+
 // POST /api/tags/batch - Batch create/update tags
 export async function POST(request: NextRequest) {
   try {

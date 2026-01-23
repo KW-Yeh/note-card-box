@@ -205,9 +205,9 @@ export class SyncService {
 		const linksUrl = since ? `/api/links?since=${since}` : "/api/links";
 
 		const [cardsRes, tagsRes, linksRes] = await Promise.all([
-			fetch(cardsUrl),
-			fetch(tagsUrl),
-			fetch(linksUrl),
+			fetch(cardsUrl, { cache: "no-store" }),
+			fetch(tagsUrl, { cache: "no-store" }),
+			fetch(linksUrl, { cache: "no-store" }),
 		]);
 
 		if (!cardsRes.ok || !tagsRes.ok || !linksRes.ok) {

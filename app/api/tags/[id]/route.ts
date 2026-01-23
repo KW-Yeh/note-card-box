@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import pool from '@/lib/db/postgres';
 
+export const dynamic = 'force-dynamic';
+
 // PUT /api/tags/[id] - Update a tag
 export async function PUT(
   request: NextRequest,

@@ -7,6 +7,12 @@ const withPWA = withPWAInit({
   disable: process.env.NODE_ENV === "development",
   register: true,
   skipWaiting: true,
+  runtimeCaching: [
+    {
+      urlPattern: /^https?:\/\/.*\/api\/.*$/,
+      handler: "NetworkOnly",
+    },
+  ],
 });
 
 const nextConfig: NextConfig = {

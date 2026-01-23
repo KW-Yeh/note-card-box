@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import pool from '@/lib/db/postgres';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/cards - Fetch all cards for current user
 export async function GET(request: NextRequest) {
   try {
