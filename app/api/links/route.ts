@@ -84,15 +84,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await pool.query(
-      `INSERT INTO links (id, user_id, source_id, target_id, relation, description, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, to_timestamp($7::bigint / 1000.0))
-       ON CONFLICT (source_id, target_id) DO UPDATE SET
-         relation = EXCLUDED.relation,
-         description = EXCLUDED.description
-       RETURNING *`,
-      [id, session.user.id, sourceId, targetId, relation, description, createdAt]
+    // Upsert link: Aurora DSQL does not support ON CONFLICT DO UPDATE
+    const existingLink = await pool.query(
+      'SELECT id FROM links WHERE source_id = $1 AND target_id = $2',
+      [sourceId, targetId]
     );
+    let result;
+    if (existingLink.rows.length > 0) {
+      result = await pool.query(
+        `UPDATE links SET relation = $1, description = $2 WHERE id = $3 RETURNING *`,
+        [relation, description, existingLink.rows[0].id]
+      );
+    } else {
+      result = await pool.query(
+        `INSERT INTO links (id, user_id, source_id, target_id, relation, description, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, to_timestamp($7::bigint / 1000.0))
+         RETURNING *`,
+        [id, session.user.id, sourceId, targetId, relation, description, createdAt]
+      );
+    }
 
     const link = result.rows[0];
     return NextResponse.json({

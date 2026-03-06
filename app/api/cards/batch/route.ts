@@ -39,41 +39,38 @@ export async function POST(request: NextRequest) {
           promotedAt,
         } = card;
 
-        const cardResult = await client.query(
-          `INSERT INTO cards (
-            id, user_id, share_id, title, content, type, status,
-            is_public, word_count, created_at, updated_at, promoted_at
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9,
-            to_timestamp($10::bigint / 1000.0),
-            to_timestamp($11::bigint / 1000.0),
-            CASE WHEN $12::bigint IS NOT NULL THEN to_timestamp($12::bigint / 1000.0) ELSE NULL END
-          )
-          ON CONFLICT (id) DO UPDATE SET
-            title = EXCLUDED.title,
-            content = EXCLUDED.content,
-            type = EXCLUDED.type,
-            status = EXCLUDED.status,
-            is_public = EXCLUDED.is_public,
-            word_count = EXCLUDED.word_count,
-            updated_at = EXCLUDED.updated_at,
-            promoted_at = EXCLUDED.promoted_at
-          RETURNING *`,
-          [
-            id,
-            session.user.id,
-            shareId,
-            title,
-            content,
-            type,
-            status,
-            isPublic,
-            wordCount,
-            createdAt,
-            updatedAt,
-            promotedAt || null,
-          ]
-        );
+        // Upsert card: Aurora DSQL does not support ON CONFLICT DO UPDATE
+        const existingCard = await client.query('SELECT id FROM cards WHERE id = $1', [id]);
+        let cardResult;
+        if (existingCard.rows.length > 0) {
+          cardResult = await client.query(
+            `UPDATE cards SET
+              title = $1, content = $2, type = $3, status = $4,
+              is_public = $5, word_count = $6,
+              updated_at = to_timestamp($7::bigint / 1000.0),
+              promoted_at = CASE WHEN $8::bigint IS NOT NULL THEN to_timestamp($8::bigint / 1000.0) ELSE promoted_at END
+            WHERE id = $9
+            RETURNING *`,
+            [title, content, type, status, isPublic, wordCount, updatedAt, promotedAt || null, id]
+          );
+        } else {
+          cardResult = await client.query(
+            `INSERT INTO cards (
+              id, user_id, share_id, title, content, type, status,
+              is_public, word_count, created_at, updated_at, promoted_at
+            ) VALUES (
+              $1, $2, $3, $4, $5, $6, $7, $8, $9,
+              to_timestamp($10::bigint / 1000.0),
+              to_timestamp($11::bigint / 1000.0),
+              CASE WHEN $12::bigint IS NOT NULL THEN to_timestamp($12::bigint / 1000.0) ELSE NULL END
+            )
+            RETURNING *`,
+            [
+              id, session.user.id, shareId, title, content, type, status,
+              isPublic, wordCount, createdAt, updatedAt, promotedAt || null,
+            ]
+          );
+        }
 
         // Update card_tags
         await client.query('DELETE FROM card_tags WHERE card_id = $1', [id]);

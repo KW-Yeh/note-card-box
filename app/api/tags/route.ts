@@ -57,14 +57,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { id, name, color, createdAt } = body;
 
-    const result = await pool.query(
-      `INSERT INTO tags (id, user_id, name, color, created_at)
-       VALUES ($1, $2, $3, $4, to_timestamp($5::bigint / 1000.0))
-       ON CONFLICT (user_id, name) DO UPDATE SET
-         color = COALESCE(EXCLUDED.color, tags.color)
-       RETURNING *`,
-      [id, session.user.id, name.toLowerCase(), color, createdAt]
+    // Upsert tag: Aurora DSQL does not support ON CONFLICT DO UPDATE
+    const existingTag = await pool.query(
+      'SELECT id FROM tags WHERE user_id = $1 AND name = $2',
+      [session.user.id, name.toLowerCase()]
     );
+    let result;
+    if (existingTag.rows.length > 0) {
+      result = await pool.query(
+        `UPDATE tags SET color = COALESCE($1, color) WHERE id = $2 RETURNING *`,
+        [color, existingTag.rows[0].id]
+      );
+    } else {
+      result = await pool.query(
+        `INSERT INTO tags (id, user_id, name, color, created_at)
+         VALUES ($1, $2, $3, $4, to_timestamp($5::bigint / 1000.0))
+         RETURNING *`,
+        [id, session.user.id, name.toLowerCase(), color, createdAt]
+      );
+    }
 
     const tag = result.rows[0];
     return NextResponse.json({

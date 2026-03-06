@@ -1,30 +1,46 @@
+import { DsqlSigner } from '@aws/aurora-dsql-node-postgres-connector';
 import { Pool } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
 
 async function migrate() {
+  const host = process.env.AURORA_DSQL_HOST!;
+  const region = process.env.AURORA_DSQL_REGION!;
+
+  const signer = new DsqlSigner({ hostname: host, region });
+  const token = await signer.getDbConnectAdminAuthToken();
+
   const pool = new Pool({
-    host: process.env.AURORA_POSTGRESQL_WRITE_HOST,
-    port: parseInt(process.env.AURORA_POSTGRESQL_PORT || '5432'),
-    database: process.env.AURORA_POSTGRESQL_DB_NAME || 'postgres',
-    user: process.env.AURORA_POSTGRESQL_USERNAME,
-    password: process.env.AURORA_POSTGRESQL_PASSWORD,
-    ssl: false,
+    host,
+    port: parseInt(process.env.AURORA_DSQL_PORT || '5432'),
+    database: process.env.AURORA_DSQL_DB || 'postgres',
+    user: process.env.AURORA_DSQL_USER || 'admin',
+    password: token,
+    ssl: { rejectUnauthorized: false },
   });
 
   const client = await pool.connect();
 
   try {
-    console.log('Connected to Aurora PostgreSQL');
-    console.log(`Host: ${process.env.AURORA_POSTGRESQL_WRITE_HOST}`);
-    console.log(`Database: ${process.env.AURORA_POSTGRESQL_DB_NAME}`);
+    console.log('Connected to Aurora DSQL');
+    console.log(`Host: ${host}`);
+    console.log(`Database: ${process.env.AURORA_DSQL_DB || 'postgres'}`);
 
     // Read and execute migration file
-    const migrationPath = path.join(__dirname, 'migrations', '001_initial_schema.sql');
+    const migrationPath = path.join(__dirname, 'migrations', '002_dsql_schema.sql');
     const sql = fs.readFileSync(migrationPath, 'utf-8');
 
-    console.log('\nExecuting migration...');
-    await client.query(sql);
+    // Aurora DSQL does not support multiple DDL statements in one transaction.
+    // Split by semicolons and execute each statement individually.
+    const statements = sql
+      .split(';')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && !s.startsWith('--'));
+
+    console.log(`\nExecuting ${statements.length} migration statements...`);
+    for (const statement of statements) {
+      await client.query(statement);
+    }
     console.log('Migration completed successfully!');
 
     // Verify tables created

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readPool } from '@/lib/db/postgres';
+import pool from '@/lib/db/postgres';
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +15,7 @@ export async function GET(
       );
     }
 
-    const result = await readPool.query(
+    const result = await pool.query(
       `SELECT
         c.share_id as "shareId",
         c.title,

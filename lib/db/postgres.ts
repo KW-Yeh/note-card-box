@@ -1,42 +1,27 @@
+import { DsqlSigner } from "@aws/aurora-dsql-node-postgres-connector";
 import { Pool } from "pg";
 
-// 主要連線池 (Write Host) - 用於寫入操作
+const host = process.env.AURORA_DSQL_HOST!;
+const region = process.env.AURORA_DSQL_REGION!;
+
+const signer = new DsqlSigner({ hostname: host, region });
+
+// Generate IAM auth token synchronously at module init via top-level await.
+// Tokens expire in ~1 hour but existing connections remain valid for the pool lifetime.
+const token = await signer.getDbConnectAdminAuthToken();
+
 const pool = new Pool({
-	host: process.env.AURORA_POSTGRESQL_WRITE_HOST,
-	port: Number.parseInt(process.env.AURORA_POSTGRESQL_PORT || "5432"),
-	database: process.env.AURORA_POSTGRESQL_DB_NAME || "postgres",
-	user: process.env.AURORA_POSTGRESQL_USERNAME,
-	password: process.env.AURORA_POSTGRESQL_PASSWORD,
-	// 只在生產環境使用 SSL (本地開發不使用)
-	ssl:
-		process.env.NODE_ENV === "production"
-			? {
-					rejectUnauthorized: false, // 對於 AWS RDS/Aurora，可以設為 false
-				}
-			: false,
+	host,
+	port: Number.parseInt(process.env.AURORA_DSQL_PORT || "5432"),
+	database: process.env.AURORA_DSQL_DB || "postgres",
+	user: process.env.AURORA_DSQL_USER || "admin",
+	password: token,
+	ssl: { rejectUnauthorized: false },
 	max: 10,
 	idleTimeoutMillis: 30000,
 });
 
 export default pool;
-
-// Read Replica Pool - 用於查詢操作 (可選)
-export const readPool = new Pool({
-	host: process.env.AURORA_POSTGRESQL_READ_HOST,
-	port: Number.parseInt(process.env.AURORA_POSTGRESQL_PORT || "5432"),
-	database: process.env.AURORA_POSTGRESQL_DB_NAME || "postgres",
-	user: process.env.AURORA_POSTGRESQL_USERNAME,
-	password: process.env.AURORA_POSTGRESQL_PASSWORD,
-	// 只在生產環境使用 SSL (本地開發不使用)
-	ssl:
-		process.env.NODE_ENV === "production"
-			? {
-					rejectUnauthorized: false, // 對於 AWS RDS/Aurora，可以設為 false
-				}
-			: false,
-	max: 10,
-	idleTimeoutMillis: 30000,
-});
 
 // Helper function for executing queries
 export async function query<T = unknown>(
