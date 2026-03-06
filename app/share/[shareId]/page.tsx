@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { zhTW } from 'date-fns/locale';
 import { CardTypeBadge } from '@/components/cards/card-type-badge';
 import { Badge } from '@/components/ui/badge';
-import { readPool } from '@/lib/db/postgres';
+import pool from '@/lib/db/postgres';
 import type { CardType } from '@/types/card';
 
 interface PageProps {
@@ -23,7 +23,7 @@ interface SharedCard {
 
 async function getSharedCard(shareId: string): Promise<SharedCard | null> {
   try {
-    const result = await readPool.query(
+    const result = await pool.query(
       `SELECT
         c.share_id as "shareId",
         c.title,

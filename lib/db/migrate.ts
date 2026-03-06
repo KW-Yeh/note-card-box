@@ -1,21 +1,14 @@
-import { DsqlSigner } from '@aws/aurora-dsql-node-postgres-connector';
-import { Pool } from 'pg';
+import { AuroraDSQLPool } from '@aws/aurora-dsql-node-postgres-connector';
 import * as fs from 'fs';
 import * as path from 'path';
 
 async function migrate() {
-  const host = process.env.AURORA_DSQL_HOST!;
-  const region = process.env.AURORA_DSQL_REGION!;
-
-  const signer = new DsqlSigner({ hostname: host, region });
-  const token = await signer.getDbConnectAdminAuthToken();
-
-  const pool = new Pool({
-    host,
+  const pool = new AuroraDSQLPool({
+    host: process.env.AURORA_DSQL_HOST!,
     port: parseInt(process.env.AURORA_DSQL_PORT || '5432'),
     database: process.env.AURORA_DSQL_DB || 'postgres',
     user: process.env.AURORA_DSQL_USER || 'admin',
-    password: token,
+    region: process.env.AURORA_DSQL_REGION!,
     ssl: { rejectUnauthorized: false },
   });
 
@@ -23,7 +16,7 @@ async function migrate() {
 
   try {
     console.log('Connected to Aurora DSQL');
-    console.log(`Host: ${host}`);
+    console.log(`Host: ${process.env.AURORA_DSQL_HOST}`);
     console.log(`Database: ${process.env.AURORA_DSQL_DB || 'postgres'}`);
 
     // Read and execute migration file
