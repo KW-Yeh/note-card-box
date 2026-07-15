@@ -17,6 +17,7 @@ import {
 	addEdge,
 	type Edge,
 	type Connection,
+	type ReactFlowInstance,
 	Panel,
 	ConnectionLineType,
 } from "@xyflow/react";
@@ -33,8 +34,9 @@ import {
 } from "@/components/ui/drawer";
 import { useLinks } from "@/contexts";
 import { useIsMobile } from "@/hooks/use-media-query";
+import { createClusteredLayout } from "@/lib/graph-layout";
 import { toast } from "sonner";
-import { Info, LoaderCircle, Sparkles, Trash2 } from "lucide-react";
+import { Info, LoaderCircle, Network, Sparkles, Trash2 } from "lucide-react";
 import {
 	RELATION_TYPE_LABELS,
 	type Card,
@@ -59,6 +61,13 @@ interface KnowledgeGraphProps {
 const nodeTypes = {
 	card: GraphNode,
 };
+
+const graphFitViewPadding = {
+	top: "190px",
+	right: "96px",
+	bottom: "170px",
+	left: "96px",
+} as const;
 
 const relationTypes: RelationType[] = ["EXTENSION", "OPPOSITION", "RELATED"];
 
@@ -165,6 +174,10 @@ export function KnowledgeGraph({
 	onNodeDoubleClick,
 }: KnowledgeGraphProps) {
 	const graphContainerRef = useRef<HTMLDivElement>(null);
+	const reactFlowInstanceRef = useRef<ReactFlowInstance<CardNode, Edge> | null>(
+		null,
+	);
+	const lastTopologySignatureRef = useRef("");
 	const [activeFilter, setActiveFilter] = useState<CardType | "ALL">("ALL");
 	const [selectedEdge, setSelectedEdge] = useState<SelectedEdge | null>(null);
 	const [isAutoLinking, startAutoLinking] = useTransition();
@@ -197,19 +210,50 @@ export function KnowledgeGraph({
 		[filteredCards],
 	);
 
-	// Create nodes from cards
-	const initialNodes: CardNode[] = useMemo(() => {
-		// Simple grid layout
-		const cols = Math.ceil(Math.sqrt(filteredCards.length));
-		const spacing = { x: 250, y: 150 };
+	const visibleLinks = useMemo(
+		() =>
+			links.filter(
+				(link) =>
+					filteredCardIds.has(link.sourceId) &&
+					filteredCardIds.has(link.targetId),
+			),
+		[filteredCardIds, links],
+	);
 
+	const topologySignature = useMemo(
+		() =>
+			JSON.stringify({
+				nodeIds: filteredCards.map((card) => card.id).sort(),
+				links: visibleLinks
+					.map(({ sourceId, targetId }) =>
+						sourceId < targetId
+							? { sourceId, targetId }
+							: { sourceId: targetId, targetId: sourceId },
+					)
+					.sort(
+						(left, right) =>
+							left.sourceId.localeCompare(right.sourceId) ||
+							left.targetId.localeCompare(right.targetId),
+					),
+			}),
+		[filteredCards, visibleLinks],
+	);
+
+	const topology = useMemo<{
+		nodeIds: string[];
+		links: Array<{ sourceId: string; targetId: string }>;
+	}>(() => JSON.parse(topologySignature), [topologySignature]);
+
+	const layoutPositions = useMemo(
+		() => createClusteredLayout(topology.nodeIds, topology.links),
+		[topology],
+	);
+
+	const initialNodes: CardNode[] = useMemo(() => {
 		return filteredCards.map((card, index) => ({
 			id: card.id,
 			type: "card",
-			position: {
-				x: (index % cols) * spacing.x,
-				y: Math.floor(index / cols) * spacing.y,
-			},
+			position: layoutPositions[card.id] ?? { x: index * 250, y: 0 },
 			data: {
 				label: card.title,
 				cardType: card.type,
@@ -217,16 +261,11 @@ export function KnowledgeGraph({
 			} satisfies CardNodeData,
 			connectable: true, // Enable connecting nodes
 		}));
-	}, [filteredCards]);
+	}, [filteredCards, layoutPositions]);
 
 	// Create edges from links (only for visible cards)
 	const initialEdges: Edge[] = useMemo(() => {
-		return links
-			.filter(
-				(link) =>
-					filteredCardIds.has(link.sourceId) &&
-					filteredCardIds.has(link.targetId),
-			)
+		return visibleLinks
 			.map((link) => ({
 				id: link.id,
 				source: link.sourceId,
@@ -242,16 +281,39 @@ export function KnowledgeGraph({
 				// Enhance visibility when selected
 				focusable: true,
 			}));
-	}, [links, filteredCardIds]);
+	}, [visibleLinks]);
 
 	const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
 	const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-	// Update nodes/edges when filtered data changes
-	useMemo(() => {
-		setNodes(initialNodes);
+	useEffect(() => {
+		const hasTopologyChanged =
+			lastTopologySignatureRef.current !== topologySignature;
+		setNodes((currentNodes) => {
+			if (hasTopologyChanged) {
+				return initialNodes;
+			}
+
+			const currentPositions = new Map(
+				currentNodes.map((node) => [node.id, node.position]),
+			);
+			return initialNodes.map((node) => ({
+				...node,
+				position: currentPositions.get(node.id) ?? node.position,
+			}));
+		});
 		setEdges(initialEdges);
-	}, [initialNodes, initialEdges, setNodes, setEdges]);
+		lastTopologySignatureRef.current = topologySignature;
+
+		if (hasTopologyChanged) {
+			requestAnimationFrame(() => {
+				reactFlowInstanceRef.current?.fitView({
+					padding: graphFitViewPadding,
+					duration: 500,
+				});
+			});
+		}
+	}, [initialNodes, initialEdges, setNodes, setEdges, topologySignature]);
 
 	const handleNodeClick = useCallback(
 		(_: React.MouseEvent, node: CardNode) => {
@@ -394,6 +456,23 @@ export function KnowledgeGraph({
 		});
 	}, [autoLinkAll]);
 
+	const handleArrangeGraph = useCallback(() => {
+		setSelectedEdge(null);
+		setNodes(
+			initialNodes.map((node) => ({
+				...node,
+				position: { ...node.position },
+			})),
+		);
+		requestAnimationFrame(() => {
+			reactFlowInstanceRef.current?.fitView({
+				padding: graphFitViewPadding,
+				duration: 500,
+			});
+		});
+		toast.success("已依卡片關係重新整理拓樸");
+	}, [initialNodes, setNodes]);
+
 	return (
 		<div ref={graphContainerRef} className="relative h-full w-full">
 			<style>{`
@@ -420,6 +499,9 @@ export function KnowledgeGraph({
 				}
 			`}</style>
 			<ReactFlow
+				onInit={(instance) => {
+					reactFlowInstanceRef.current = instance;
+				}}
 				nodes={nodes}
 				edges={edges}
 				onNodesChange={onNodesChange}
@@ -432,6 +514,7 @@ export function KnowledgeGraph({
 				onEdgesDelete={handleEdgesDelete}
 				nodeTypes={nodeTypes}
 				fitView
+				fitViewOptions={{ padding: graphFitViewPadding }}
 				minZoom={0.1}
 				maxZoom={2}
 				defaultEdgeOptions={{
@@ -475,6 +558,17 @@ export function KnowledgeGraph({
 							<Sparkles className="mr-2 h-4 w-4" />
 						)}
 						{isAutoLinking ? "分析卡片中..." : "自動連結"}
+					</Button>
+
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={handleArrangeGraph}
+						disabled={filteredCards.length < 2}
+						className="min-h-11 w-full cursor-pointer bg-background/90"
+					>
+						<Network className="mr-2 h-4 w-4" />
+						整理拓樸
 					</Button>
 				</Panel>
 

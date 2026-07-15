@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:auto-link": "node --experimental-strip-types --test lib/auto-link.test.mjs"
+    "test:auto-link": "node --experimental-strip-types --test lib/auto-link.test.mjs",
+    "test:graph-layout": "node --experimental-strip-types --test lib/graph-layout.test.mjs"
   },
   "dependencies": {
     "@auth/pg-adapter": "^1.11.1",
