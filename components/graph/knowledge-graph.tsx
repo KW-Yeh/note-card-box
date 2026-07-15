@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import {
 	ReactFlow,
 	Controls,
@@ -19,6 +19,7 @@ import { GraphNode, type CardNode, type CardNodeData } from "./graph-node";
 import { Button } from "@/components/ui/button";
 import { useLinks } from "@/contexts";
 import { toast } from "sonner";
+import { Info, LoaderCircle, Sparkles } from "lucide-react";
 import type { Card, RelationType, CardType } from "@/types/card";
 
 interface KnowledgeGraphProps {
@@ -50,7 +51,18 @@ const edgeStyles: Record<RelationType, Partial<Edge>> = {
 		markerEnd: { type: MarkerType.ArrowClosed, color: "#ef4444" },
 		animated: true,
 	},
+	RELATED: {
+		style: { stroke: "#f59e0b", strokeWidth: 2, strokeDasharray: "2,4" },
+		markerEnd: { type: MarkerType.ArrowClosed, color: "#f59e0b" },
+		animated: false,
+	},
 };
+
+function getEdgeLabel(relation: RelationType): string | undefined {
+	if (relation === "OPPOSITION") return "對立";
+	if (relation === "RELATED") return "待確認";
+	return undefined;
+}
 
 const cardTypeFilters: {
 	type: CardType | "ALL";
@@ -72,7 +84,8 @@ export function KnowledgeGraph({
 }: KnowledgeGraphProps) {
 	const [activeFilter, setActiveFilter] = useState<CardType | "ALL">("ALL");
 	const [linkType, setLinkType] = useState<RelationType>("EXTENSION");
-	const { createLink, deleteLink, fetchLinks } = useLinks();
+	const [isAutoLinking, startAutoLinking] = useTransition();
+	const { createLink, deleteLink, fetchLinks, autoLinkAll } = useLinks();
 
 	// Filter cards based on active filter
 	const filteredCards = useMemo(() => {
@@ -120,7 +133,7 @@ export function KnowledgeGraph({
 				source: link.sourceId,
 				target: link.targetId,
 				...edgeStyles[link.relation],
-				label: link.relation === "OPPOSITION" ? "對立" : undefined,
+				label: getEdgeLabel(link.relation),
 				labelStyle: { fill: "#6b7280", fontSize: 10 },
 				labelBgStyle: { fill: "transparent" },
 				// Selected state styling
@@ -179,7 +192,7 @@ export function KnowledgeGraph({
 					source: connection.source,
 					target: connection.target,
 					...edgeStyles[linkType],
-					label: linkType === "OPPOSITION" ? "對立" : undefined,
+					label: getEdgeLabel(linkType),
 					labelStyle: { fill: "#6b7280", fontSize: 10 },
 					labelBgStyle: { fill: "transparent" },
 				};
@@ -216,6 +229,21 @@ export function KnowledgeGraph({
 		},
 		[deleteLink, fetchLinks],
 	);
+
+	const handleAutoLink = useCallback(() => {
+		startAutoLinking(async () => {
+			try {
+				const createdCount = await autoLinkAll();
+				toast.success(
+					createdCount > 0
+						? `已建立 ${createdCount} 個待確認連結`
+						: "沒有發現新的相關連結",
+				);
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : "自動連結失敗");
+			}
+		});
+	}, [autoLinkAll]);
 
 	return (
 		<div className="h-full w-full">
@@ -314,6 +342,21 @@ export function KnowledgeGraph({
 							</Button>
 						</div>
 					</div>
+
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={handleAutoLink}
+						disabled={isAutoLinking || cards.length < 2}
+						className="min-h-11 w-full cursor-pointer bg-background/90"
+					>
+						{isAutoLinking ? (
+							<LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+						) : (
+							<Sparkles className="mr-2 h-4 w-4" />
+						)}
+						{isAutoLinking ? "分析卡片中..." : "自動連結"}
+					</Button>
 				</Panel>
 
 				{/* Stats Panel - hidden on mobile to avoid overlap with filter buttons */}
@@ -364,9 +407,16 @@ export function KnowledgeGraph({
 								/>
 								<span>對立</span>
 							</div>
+							<div className="flex items-center gap-2">
+								<div className="h-0.5 w-6 border-t-2 border-dotted border-amber-500" />
+								<span>待確認</span>
+							</div>
 						</div>
 						<div className="mt-3 border-t pt-2 text-xs text-muted-foreground">
-							<p>💡 提示：</p>
+							<p className="flex items-center gap-1">
+								<Info className="h-3.5 w-3.5" />
+								提示：
+							</p>
 							<p>
 								• 點選連結線會變成
 								<span className="text-blue-500 font-semibold">藍色</span>並發光

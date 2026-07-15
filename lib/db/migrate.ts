@@ -19,16 +19,22 @@ async function migrate() {
     console.log(`Host: ${process.env.AURORA_DSQL_HOST}`);
     console.log(`Database: ${process.env.AURORA_DSQL_DB || 'postgres'}`);
 
-    // Read and execute migration file
-    const migrationPath = path.join(__dirname, 'migrations', '002_dsql_schema.sql');
-    const sql = fs.readFileSync(migrationPath, 'utf-8');
+    const migrationFiles = [
+      '002_dsql_schema.sql',
+      '004_dsql_add_related_link_relation.sql',
+    ];
 
     // Aurora DSQL does not support multiple DDL statements in one transaction.
     // Split by semicolons and execute each statement individually.
-    const statements = sql
-      .split(';')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !s.startsWith('--'));
+    const statements = migrationFiles.flatMap((migrationFile) => {
+      const migrationPath = path.join(__dirname, 'migrations', migrationFile);
+      const sql = fs.readFileSync(migrationPath, 'utf-8');
+
+      return sql
+        .split(';')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && !s.startsWith('--'));
+    });
 
     console.log(`\nExecuting ${statements.length} migration statements...`);
     for (const statement of statements) {

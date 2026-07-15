@@ -319,9 +319,11 @@ export default function CardDetailPage({ params }: PageProps) {
 											className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent"
 										>
 											<div className="flex items-center gap-2">
-												<Badge variant="outline" className="text-xs">
-													被{RELATION_TYPE_LABELS[link.relation]}
-												</Badge>
+										<Badge variant="outline" className="text-xs">
+											{link.relation === "RELATED"
+												? RELATION_TYPE_LABELS.RELATED
+												: `被${RELATION_TYPE_LABELS[link.relation]}`}
+										</Badge>
 												<span className="font-medium">{linkedCard.title}</span>
 											</div>
 											<CardTypeBadge type={linkedCard.type} />

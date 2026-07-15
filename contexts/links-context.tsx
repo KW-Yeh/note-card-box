@@ -10,6 +10,10 @@ import {
 } from "react";
 import { useDB } from "./db-context";
 import { syncService } from "@/lib/sync/sync-service";
+import {
+	findAutoLinkSuggestions,
+	type AutoLinkSuggestion,
+} from "@/lib/auto-link";
 import { generateUUID } from "@/lib/utils";
 import type { Link, RelationType, Card } from "@/types/card";
 
@@ -24,7 +28,10 @@ interface LinksContextValue {
 		relation: RelationType,
 		description?: string,
 	) => Promise<Link>;
+	updateLink: (id: string, relation: RelationType) => Promise<Link>;
 	deleteLink: (id: string) => Promise<void>;
+	autoLinkCard: (cardId: string) => Promise<number>;
+	autoLinkAll: () => Promise<number>;
 	suggestRelatedCards: (
 		cardTagIds: string[],
 		excludeCardId?: string,
@@ -51,7 +58,7 @@ export function LinksProvider({
 
 	// Helper to queue sync operation
 	const queueSync = useCallback(
-		(action: "create" | "delete", link: Link) => {
+		(action: "create" | "update" | "delete", link: Link) => {
 			if (isAuthenticated) {
 				syncService.queueOperation("link", action, link.id, link);
 				if (isOnline) {
@@ -116,13 +123,13 @@ export function LinksProvider({
 		): Promise<Link> => {
 			if (!db) throw new Error("Database not ready");
 
-			// Check if link already exists
-			const existingLinks = await db.getAllFromIndex(
-				"links",
-				"by-sourceId",
-				sourceId,
-			);
-			const duplicate = existingLinks.find((l) => l.targetId === targetId);
+			const [outgoingLinks, incomingLinks] = await Promise.all([
+				db.getAllFromIndex("links", "by-sourceId", sourceId),
+				db.getAllFromIndex("links", "by-targetId", sourceId),
+			]);
+			const duplicate =
+				outgoingLinks.some((link) => link.targetId === targetId) ||
+				incomingLinks.some((link) => link.sourceId === targetId);
 			if (duplicate) {
 				throw new Error("Link already exists");
 			}
@@ -148,6 +155,25 @@ export function LinksProvider({
 		[db, queueSync],
 	);
 
+	const updateLink = useCallback(
+		async (id: string, relation: RelationType): Promise<Link> => {
+			if (!db) throw new Error("Database not ready");
+
+			const existing = await db.get("links", id);
+			if (!existing) throw new Error("Link not found");
+
+			const updated = { ...existing, relation };
+			await db.put("links", updated);
+			setLinks((previous) =>
+				previous.map((link) => (link.id === id ? updated : link)),
+			);
+			queueSync("update", updated);
+
+			return updated;
+		},
+		[db, queueSync],
+	);
+
 	const deleteLink = useCallback(
 		async (id: string) => {
 			if (!db) throw new Error("Database not ready");
@@ -163,6 +189,69 @@ export function LinksProvider({
 		},
 		[db, queueSync],
 	);
+
+	const persistAutoLinks = useCallback(
+		async (suggestions: AutoLinkSuggestion[]): Promise<number> => {
+			if (!db) throw new Error("Database not ready");
+			if (suggestions.length === 0) return 0;
+
+			const createdAt = Date.now();
+			const newLinks: Link[] = suggestions.map((suggestion, index) => ({
+				id: generateUUID(),
+				sourceId: suggestion.sourceId,
+				targetId: suggestion.targetId,
+				relation: "RELATED",
+				createdAt: createdAt + index,
+			}));
+
+			const transaction = db.transaction("links", "readwrite");
+			await Promise.all(
+				newLinks.map((link) => transaction.objectStore("links").put(link)),
+			);
+			await transaction.done;
+			setLinks((previous) => [...previous, ...newLinks]);
+
+			if (isAuthenticated) {
+				for (const link of newLinks) {
+					syncService.queueOperation("link", "create", link.id, link);
+				}
+				if (isOnline) void syncService.processQueue();
+			}
+
+			return newLinks.length;
+		},
+		[db, isAuthenticated, isOnline],
+	);
+
+	const autoLinkCard = useCallback(
+		async (cardId: string): Promise<number> => {
+			if (!db) throw new Error("Database not ready");
+			const [allCards, existingLinks] = await Promise.all([
+				db.getAll("cards"),
+				db.getAll("links"),
+			]);
+			if (!allCards.some((card) => card.id === cardId)) {
+				throw new Error("Card not found");
+			}
+
+			return persistAutoLinks(
+				findAutoLinkSuggestions(allCards, existingLinks, { cardId }),
+			);
+		},
+		[db, persistAutoLinks],
+	);
+
+	const autoLinkAll = useCallback(async (): Promise<number> => {
+		if (!db) throw new Error("Database not ready");
+		const [allCards, existingLinks] = await Promise.all([
+			db.getAll("cards"),
+			db.getAll("links"),
+		]);
+
+		return persistAutoLinks(
+			findAutoLinkSuggestions(allCards, existingLinks),
+		);
+	}, [db, persistAutoLinks]);
 
 	const suggestRelatedCards = useCallback(
 		async (cardTagIds: string[], excludeCardId?: string): Promise<Card[]> => {
@@ -201,7 +290,10 @@ export function LinksProvider({
 				fetchLinks,
 				getLinksForCard,
 				createLink,
+				updateLink,
 				deleteLink,
+				autoLinkCard,
+				autoLinkAll,
 				suggestRelatedCards,
 				setLinksFromCloud,
 			}}
