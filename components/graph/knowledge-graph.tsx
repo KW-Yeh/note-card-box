@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	useTransition,
+} from "react";
 import {
 	ReactFlow,
 	Controls,
@@ -16,10 +23,24 @@ import {
 import "@xyflow/react/dist/style.css";
 import { GraphNode, type CardNode, type CardNodeData } from "./graph-node";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+	Drawer,
+	DrawerContent,
+	DrawerDescription,
+	DrawerHeader,
+	DrawerTitle,
+} from "@/components/ui/drawer";
 import { useLinks } from "@/contexts";
+import { useIsMobile } from "@/hooks/use-media-query";
 import { toast } from "sonner";
-import { Info, LoaderCircle, Sparkles } from "lucide-react";
-import type { Card, RelationType, CardType } from "@/types/card";
+import { Info, LoaderCircle, Sparkles, Trash2 } from "lucide-react";
+import {
+	RELATION_TYPE_LABELS,
+	type Card,
+	type RelationType,
+	type CardType,
+} from "@/types/card";
 
 interface KnowledgeGraphProps {
 	readonly cards: Card[];
@@ -38,6 +59,71 @@ interface KnowledgeGraphProps {
 const nodeTypes = {
 	card: GraphNode,
 };
+
+const relationTypes: RelationType[] = ["EXTENSION", "OPPOSITION", "RELATED"];
+
+interface SelectedEdge {
+	id: string;
+	x: number;
+	y: number;
+}
+
+interface RelationEditorProps {
+	relation: RelationType;
+	isUpdating: boolean;
+	onSelect: (relation: RelationType) => void;
+	onDelete: () => void;
+}
+
+function RelationEditor({
+	relation,
+	isUpdating,
+	onSelect,
+	onDelete,
+}: RelationEditorProps) {
+	return (
+		<div className="space-y-3">
+			<div className="flex items-center justify-between gap-3">
+				<p className="text-sm font-medium">連結關係</p>
+				<div className="flex items-center gap-2">
+					{isUpdating ? (
+						<LoaderCircle
+							className="h-4 w-4 animate-spin text-muted-foreground"
+							aria-label="更新中"
+						/>
+					) : null}
+					<Badge variant="secondary">
+						目前：{RELATION_TYPE_LABELS[relation]}
+					</Badge>
+				</div>
+			</div>
+			<div className="grid grid-cols-2 gap-2">
+				{relationTypes
+					.filter((option) => option !== relation)
+					.map((option) => (
+						<Button
+							key={option}
+							variant="outline"
+							onClick={() => onSelect(option)}
+							disabled={isUpdating}
+							className="min-h-11 cursor-pointer"
+						>
+							{RELATION_TYPE_LABELS[option]}
+						</Button>
+					))}
+			</div>
+			<Button
+				variant="destructive"
+				onClick={onDelete}
+				disabled={isUpdating}
+				className="min-h-11 w-full cursor-pointer"
+			>
+				<Trash2 className="mr-2 h-4 w-4" />
+				刪除連結
+			</Button>
+		</div>
+	);
+}
 
 const edgeStyles: Record<RelationType, Partial<Edge>> = {
 	EXTENSION: {
@@ -78,10 +164,27 @@ export function KnowledgeGraph({
 	onNodeClick,
 	onNodeDoubleClick,
 }: KnowledgeGraphProps) {
+	const graphContainerRef = useRef<HTMLDivElement>(null);
 	const [activeFilter, setActiveFilter] = useState<CardType | "ALL">("ALL");
-	const [linkType, setLinkType] = useState<RelationType>("EXTENSION");
+	const [selectedEdge, setSelectedEdge] = useState<SelectedEdge | null>(null);
 	const [isAutoLinking, startAutoLinking] = useTransition();
-	const { createLink, deleteLink, fetchLinks, autoLinkAll } = useLinks();
+	const [isUpdatingLink, startUpdatingLink] = useTransition();
+	const isMobile = useIsMobile();
+	const { createLink, updateLink, deleteLink, fetchLinks, autoLinkAll } =
+		useLinks();
+	const selectedLink = selectedEdge
+		? links.find((link) => link.id === selectedEdge.id)
+		: undefined;
+
+	useEffect(() => {
+		if (!selectedEdge) return;
+
+		const handleEscape = (event: KeyboardEvent) => {
+			if (event.key === "Escape") setSelectedEdge(null);
+		};
+		window.addEventListener("keydown", handleEscape);
+		return () => window.removeEventListener("keydown", handleEscape);
+	}, [selectedEdge]);
 
 	// Filter cards based on active filter
 	const filteredCards = useMemo(() => {
@@ -152,6 +255,7 @@ export function KnowledgeGraph({
 
 	const handleNodeClick = useCallback(
 		(_: React.MouseEvent, node: CardNode) => {
+			setSelectedEdge(null);
 			if (onNodeClick) {
 				const card = cards.find((c) => c.id === node.id);
 				if (card) onNodeClick(card);
@@ -178,7 +282,7 @@ export function KnowledgeGraph({
 				const newLink = await createLink(
 					connection.source,
 					connection.target,
-					linkType,
+					"EXTENSION",
 					undefined,
 				);
 
@@ -187,8 +291,8 @@ export function KnowledgeGraph({
 					id: newLink.id,
 					source: connection.source,
 					target: connection.target,
-					...edgeStyles[linkType],
-					label: getEdgeLabel(linkType),
+					...edgeStyles.EXTENSION,
+					label: getEdgeLabel("EXTENSION"),
 					labelStyle: { fill: "#6b7280", fontSize: 10 },
 					labelBgStyle: { fill: "transparent" },
 				};
@@ -203,7 +307,25 @@ export function KnowledgeGraph({
 				}
 			}
 		},
-		[createLink, linkType, setEdges],
+		[createLink, setEdges],
+	);
+
+	const handleEdgeClick = useCallback(
+		(event: React.MouseEvent, edge: Edge) => {
+			const bounds = graphContainerRef.current?.getBoundingClientRect();
+			if (!bounds) return;
+
+			const halfWidth = 128;
+			setSelectedEdge({
+				id: edge.id,
+				x: Math.min(
+					Math.max(event.clientX - bounds.left, halfWidth),
+					bounds.width - halfWidth,
+				),
+				y: Math.max(event.clientY - bounds.top, 180),
+			});
+		},
+		[],
 	);
 
 	const handleEdgesDelete = useCallback(
@@ -214,6 +336,7 @@ export function KnowledgeGraph({
 
 				// Refresh the links data
 				await fetchLinks();
+				setSelectedEdge(null);
 				toast.success(`已刪除 ${edgesToDelete.length} 個連結`);
 			} catch (error) {
 				if (error instanceof Error) {
@@ -225,6 +348,36 @@ export function KnowledgeGraph({
 		},
 		[deleteLink, fetchLinks],
 	);
+
+	const handleUpdateRelation = useCallback(
+		(relation: RelationType) => {
+			if (!selectedLink) return;
+
+			startUpdatingLink(async () => {
+				try {
+					await updateLink(selectedLink.id, relation);
+					toast.success(`連結已更新為「${RELATION_TYPE_LABELS[relation]}」`);
+				} catch (error) {
+					toast.error(error instanceof Error ? error.message : "更新連結失敗");
+				}
+			});
+		},
+		[selectedLink, updateLink],
+	);
+
+	const handleDeleteSelectedLink = useCallback(() => {
+		if (!selectedLink) return;
+
+		startUpdatingLink(async () => {
+			try {
+				await deleteLink(selectedLink.id);
+				setSelectedEdge(null);
+				toast.success("連結已刪除");
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : "刪除連結失敗");
+			}
+		});
+	}, [deleteLink, selectedLink]);
 
 	const handleAutoLink = useCallback(() => {
 		startAutoLinking(async () => {
@@ -242,7 +395,7 @@ export function KnowledgeGraph({
 	}, [autoLinkAll]);
 
 	return (
-		<div className="h-full w-full">
+		<div ref={graphContainerRef} className="relative h-full w-full">
 			<style>{`
 				/* Selected edge styling */
 				.react-flow__edge.selected .react-flow__edge-path,
@@ -273,6 +426,8 @@ export function KnowledgeGraph({
 				onEdgesChange={onEdgesChange}
 				onNodeClick={handleNodeClick}
 				onNodeDoubleClick={handleNodeDoubleClick}
+				onEdgeClick={handleEdgeClick}
+				onPaneClick={() => setSelectedEdge(null)}
 				onConnect={handleConnect}
 				onEdgesDelete={handleEdgesDelete}
 				nodeTypes={nodeTypes}
@@ -282,10 +437,7 @@ export function KnowledgeGraph({
 				defaultEdgeOptions={{
 					type: "smoothstep",
 				}}
-				connectionLineStyle={{
-					stroke: linkType === "OPPOSITION" ? "#ef4444" : "#6b7280",
-					strokeWidth: 2,
-				}}
+				connectionLineStyle={{ stroke: "#6b7280", strokeWidth: 2 }}
 				connectionLineType={ConnectionLineType.SmoothStep}
 				edgesReconnectable={false}
 				deleteKeyCode={["Backspace", "Delete"]}
@@ -308,29 +460,6 @@ export function KnowledgeGraph({
 								{filter.label}
 							</Button>
 						))}
-					</div>
-
-					{/* Link Type Selector */}
-					<div className="flex flex-col gap-2 rounded-lg bg-background/80 p-2 backdrop-blur-sm">
-						<p className="text-xs font-medium text-muted-foreground">
-							連結類型
-						</p>
-						<div className="flex gap-2">
-							<Button
-								variant={linkType === "EXTENSION" ? "default" : "outline"}
-								size="sm"
-								onClick={() => setLinkType("EXTENSION")}
-							>
-								相關
-							</Button>
-							<Button
-								variant={linkType === "OPPOSITION" ? "default" : "outline"}
-								size="sm"
-								onClick={() => setLinkType("OPPOSITION")}
-							>
-								對立
-							</Button>
-						</div>
 					</div>
 
 					<Button
@@ -416,6 +545,53 @@ export function KnowledgeGraph({
 					</div>
 				</Panel>
 			</ReactFlow>
+
+			{selectedLink && !isMobile ? (
+				<div
+					role="dialog"
+					aria-label="編輯連結關係"
+					className="absolute z-50 w-64 rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg"
+					style={{
+						left: selectedEdge?.x,
+						top: selectedEdge?.y,
+						transform: "translate(-50%, calc(-100% - 12px))",
+					}}
+					onPointerDown={(event) => event.stopPropagation()}
+				>
+					<RelationEditor
+						relation={selectedLink.relation}
+						isUpdating={isUpdatingLink}
+						onSelect={handleUpdateRelation}
+						onDelete={handleDeleteSelectedLink}
+					/>
+				</div>
+			) : null}
+
+			<Drawer
+				open={Boolean(selectedLink && isMobile)}
+				onOpenChange={(open) => {
+					if (!open) setSelectedEdge(null);
+				}}
+			>
+				<DrawerContent>
+					<DrawerHeader>
+						<DrawerTitle>編輯連結</DrawerTitle>
+						<DrawerDescription>
+							選擇這兩張卡片之間的關係，或刪除此連結。
+						</DrawerDescription>
+					</DrawerHeader>
+					{selectedLink ? (
+						<div className="p-4 pt-0">
+							<RelationEditor
+								relation={selectedLink.relation}
+								isUpdating={isUpdatingLink}
+								onSelect={handleUpdateRelation}
+								onDelete={handleDeleteSelectedLink}
+							/>
+						</div>
+					) : null}
+				</DrawerContent>
+			</Drawer>
 		</div>
 	);
 }
