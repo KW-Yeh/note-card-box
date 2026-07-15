@@ -242,7 +242,7 @@ export function CardsProvider({
 			const linksTo = await db.getAllFromIndex("links", "by-targetId", id);
 
 			if (linksFrom.length + linksTo.length === 0) {
-				throw new Error("請先建立與現有知識的聯繫（延伸或對立），再進行歸納。");
+				throw new Error("請先建立與現有知識的聯繫（相關或對立），再進行歸納。");
 			}
 
 			const promoted: Card = {

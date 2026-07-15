@@ -10,7 +10,6 @@ import {
 	addEdge,
 	type Edge,
 	type Connection,
-	MarkerType,
 	Panel,
 	ConnectionLineType,
 } from "@xyflow/react";
@@ -43,17 +42,14 @@ const nodeTypes = {
 const edgeStyles: Record<RelationType, Partial<Edge>> = {
 	EXTENSION: {
 		style: { stroke: "#6b7280", strokeWidth: 2 },
-		markerEnd: { type: MarkerType.ArrowClosed, color: "#6b7280" },
 		animated: false,
 	},
 	OPPOSITION: {
 		style: { stroke: "#ef4444", strokeWidth: 2, strokeDasharray: "5,5" },
-		markerEnd: { type: MarkerType.ArrowClosed, color: "#ef4444" },
 		animated: true,
 	},
 	RELATED: {
 		style: { stroke: "#f59e0b", strokeWidth: 2, strokeDasharray: "2,4" },
-		markerEnd: { type: MarkerType.ArrowClosed, color: "#f59e0b" },
 		animated: false,
 	},
 };
@@ -257,12 +253,6 @@ export function KnowledgeGraph({
 					filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.8));
 				}
 				
-				/* Selected edge marker (arrow) */
-				.react-flow__edge.selected .react-flow__edge-path + marker path,
-				.react-flow__edge:focus .react-flow__edge-path + marker path {
-					fill: #3b82f6 !important;
-				}
-				
 				/* Hover effect for edges */
 				.react-flow__edge:hover .react-flow__edge-path {
 					stroke-width: 3 !important;
@@ -331,7 +321,7 @@ export function KnowledgeGraph({
 								size="sm"
 								onClick={() => setLinkType("EXTENSION")}
 							>
-								延伸
+								相關
 							</Button>
 							<Button
 								variant={linkType === "OPPOSITION" ? "default" : "outline"}
@@ -395,7 +385,7 @@ export function KnowledgeGraph({
 						<div className="flex gap-4 text-xs">
 							<div className="flex items-center gap-2">
 								<div className="h-0.5 w-6 bg-gray-500" />
-								<span>延伸</span>
+								<span>相關</span>
 							</div>
 							<div className="flex items-center gap-2">
 								<div

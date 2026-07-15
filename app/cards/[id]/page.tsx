@@ -295,11 +295,11 @@ export default function CardDetailPage({ params }: PageProps) {
 											key={link.id}
 											href={`/cards/${linkedCard.id}`}
 											className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent"
-										>
-											<div className="flex items-center gap-2">
-												<Badge variant="outline" className="text-xs">
-													{RELATION_TYPE_LABELS[link.relation]}
-												</Badge>
+									>
+										<div className="flex items-center gap-2">
+											<Badge variant="outline" className="text-xs">
+												{RELATION_TYPE_LABELS[link.relation]}
+											</Badge>
 												<span className="font-medium">{linkedCard.title}</span>
 											</div>
 											<CardTypeBadge type={linkedCard.type} />
@@ -320,9 +320,7 @@ export default function CardDetailPage({ params }: PageProps) {
 										>
 											<div className="flex items-center gap-2">
 										<Badge variant="outline" className="text-xs">
-											{link.relation === "RELATED"
-												? RELATION_TYPE_LABELS.RELATED
-												: `被${RELATION_TYPE_LABELS[link.relation]}`}
+											{RELATION_TYPE_LABELS[link.relation]}
 										</Badge>
 												<span className="font-medium">{linkedCard.title}</span>
 											</div>

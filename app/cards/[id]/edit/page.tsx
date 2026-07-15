@@ -445,7 +445,7 @@ export default function EditCardPage({ params }: PageProps) {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="EXTENSION">
-                              {RELATION_TYPE_LABELS.EXTENSION} - 相關延伸
+                              {RELATION_TYPE_LABELS.EXTENSION} - 內容相關
                             </SelectItem>
                             <SelectItem value="OPPOSITION">
                               {RELATION_TYPE_LABELS.OPPOSITION} - 對立觀點

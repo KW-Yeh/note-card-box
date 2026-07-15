@@ -86,8 +86,11 @@ export async function POST(request: NextRequest) {
 
     // Upsert link: Aurora DSQL does not support ON CONFLICT DO UPDATE
     const existingLink = await pool.query(
-      'SELECT id FROM links WHERE source_id = $1 AND target_id = $2',
-      [sourceId, targetId]
+      `SELECT id FROM links
+       WHERE user_id = $3
+         AND ((source_id = $1 AND target_id = $2)
+           OR (source_id = $2 AND target_id = $1))`,
+      [sourceId, targetId, session.user.id]
     );
     let result;
     if (existingLink.rows.length > 0) {
