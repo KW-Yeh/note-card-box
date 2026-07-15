@@ -1,5 +1,5 @@
 export type CardType = 'PERMANENT' | 'INNOVATION' | 'LITERATURE' | 'PROJECT';
-export type RelationType = 'EXTENSION' | 'OPPOSITION';
+export type RelationType = 'EXTENSION' | 'OPPOSITION' | 'RELATED';
 export type CardStatus = 'DRAFT' | 'PENDING' | 'ARCHIVED';
 
 export interface Card {
@@ -50,4 +50,5 @@ export const CARD_TYPE_COLORS: Record<CardType, string> = {
 export const RELATION_TYPE_LABELS: Record<RelationType, string> = {
   EXTENSION: '延伸',
   OPPOSITION: '對立',
+  RELATED: '待確認',
 };

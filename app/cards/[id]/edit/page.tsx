@@ -27,7 +27,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useCards, useTags, useLinks, useDB, useSession } from '@/contexts';
-import { type Card, type CardType, type RelationType, type Tag, CARD_TYPE_LABELS, RELATION_TYPE_LABELS } from '@/types/card';
+import { type Card, type CardType, type Link as CardLink, type RelationType, type Tag, CARD_TYPE_LABELS, RELATION_TYPE_LABELS } from '@/types/card';
 import { TITLE_MAX_LENGTH } from '@/lib/constants';
 import { toast } from 'sonner';
 
@@ -41,9 +41,9 @@ export default function EditCardPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
   const { isReady } = useDB();
-  const { getCard, updateCard, searchCards } = useCards();
+  const { cards, getCard, updateCard, searchCards } = useCards();
   const { tags, fetchTags, getOrCreateTag } = useTags();
-  const { createLink, getLinksForCard, suggestRelatedCards } = useLinks();
+  const { createLink, updateLink, getLinksForCard, suggestRelatedCards } = useLinks();
   const { data: session } = useSession();
 
   const [card, setCard] = useState<Card | null>(null);
@@ -63,10 +63,7 @@ export default function EditCardPage({ params }: PageProps) {
   const [selectedLinkTarget, setSelectedLinkTarget] = useState<Card | null>(null);
   const [linkRelation, setLinkRelation] = useState<RelationType>('EXTENSION');
   const [suggestedCards, setSuggestedCards] = useState<Card[]>([]);
-  const [existingLinks, setExistingLinks] = useState<{ from: string[]; to: string[] }>({
-    from: [],
-    to: [],
-  });
+  const [existingLinks, setExistingLinks] = useState<CardLink[]>([]);
 
   useEffect(() => {
     if (isReady) {
@@ -90,10 +87,7 @@ export default function EditCardPage({ params }: PageProps) {
 
         // Load existing links
         const links = await getLinksForCard(id);
-        setExistingLinks({
-          from: links.from.map((l) => l.targetId),
-          to: links.to.map((l) => l.sourceId),
-        });
+        setExistingLinks([...links.from, ...links.to]);
 
         // Load suggested cards
         const suggested = await suggestRelatedCards(cardData.tagIds, id);
@@ -144,7 +138,7 @@ export default function EditCardPage({ params }: PageProps) {
         setSelectedTagIds((prev) => [...prev, tag.id]);
       }
       setTagInput('');
-    } catch (error) {
+    } catch {
       toast.error('新增標籤失敗');
     }
   };
@@ -195,8 +189,9 @@ export default function EditCardPage({ params }: PageProps) {
         (c) =>
           c.id !== id &&
           c.type === 'PERMANENT' &&
-          !existingLinks.from.includes(c.id) &&
-          !existingLinks.to.includes(c.id)
+          !existingLinks.some(
+            (link) => link.sourceId === c.id || link.targetId === c.id
+          )
       );
       setLinkSearchResults(filtered);
     } else {
@@ -208,17 +203,26 @@ export default function EditCardPage({ params }: PageProps) {
     if (!selectedLinkTarget) return;
 
     try {
-      await createLink(id, selectedLinkTarget.id, linkRelation);
-      setExistingLinks((prev) => ({
-        ...prev,
-        from: [...prev.from, selectedLinkTarget.id],
-      }));
+      const newLink = await createLink(id, selectedLinkTarget.id, linkRelation);
+      setExistingLinks((prev) => [...prev, newLink]);
       setIsLinkDialogOpen(false);
       setSelectedLinkTarget(null);
       setLinkSearch('');
       toast.success('連結已建立');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '建立連結失敗');
+    }
+  };
+
+  const handleUpdateLink = async (linkId: string, relation: RelationType) => {
+    try {
+      const updated = await updateLink(linkId, relation);
+      setExistingLinks((previous) =>
+        previous.map((link) => (link.id === linkId ? updated : link))
+      );
+      toast.success('連結類型已更新');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '更新連結失敗');
     }
   };
 
@@ -465,8 +469,54 @@ export default function EditCardPage({ params }: PageProps) {
               </Dialog>
             </div>
             <p className="text-xs text-muted-foreground">
-              已建立 {existingLinks.from.length + existingLinks.to.length} 個連結
+              已建立 {existingLinks.length} 個連結
             </p>
+            {existingLinks.length > 0 && (
+              <div className="space-y-2">
+                {existingLinks.map((existingLink) => {
+                  const relatedCardId =
+                    existingLink.sourceId === id
+                      ? existingLink.targetId
+                      : existingLink.sourceId;
+                  const relatedCard = cards.find((item) => item.id === relatedCardId);
+
+                  return (
+                    <div
+                      key={existingLink.id}
+                      className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <span className="min-w-0 truncate text-sm font-medium">
+                        {relatedCard?.title || '關聯卡片'}
+                      </span>
+                      <Select
+                        value={existingLink.relation}
+                        onValueChange={(value) =>
+                          handleUpdateLink(existingLink.id, value as RelationType)
+                        }
+                      >
+                        <SelectTrigger
+                          className="min-h-11 w-full cursor-pointer sm:w-36"
+                          aria-label={`設定與 ${relatedCard?.title || '關聯卡片'} 的連結類型`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="RELATED" disabled>
+                            {RELATION_TYPE_LABELS.RELATED}
+                          </SelectItem>
+                          <SelectItem value="EXTENSION">
+                            {RELATION_TYPE_LABELS.EXTENSION}
+                          </SelectItem>
+                          <SelectItem value="OPPOSITION">
+                            {RELATION_TYPE_LABELS.OPPOSITION}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Actions */}

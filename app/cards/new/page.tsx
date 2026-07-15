@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useCards, useTags, useDB } from '@/contexts';
+import { useCards, useTags, useLinks, useDB } from '@/contexts';
 import { type CardType, type Tag, CARD_TYPE_LABELS } from '@/types/card';
 import { TITLE_MAX_LENGTH } from '@/lib/constants';
 import { toast } from 'sonner';
@@ -29,6 +29,7 @@ export default function NewCardPage() {
   const { isReady } = useDB();
   const { createCard } = useCards();
   const { tags, fetchTags, getOrCreateTag } = useTags();
+  const { autoLinkCard } = useLinks();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -61,7 +62,17 @@ export default function NewCardPage() {
         tagIds: selectedTagIds,
       });
 
-      toast.success('卡片已建立');
+      try {
+        const linkCount = await autoLinkCard(card.id);
+        toast.success(
+          linkCount > 0
+            ? `卡片已建立，找到 ${linkCount} 個相關連結`
+            : '卡片已建立，暫未找到相關連結'
+        );
+      } catch (autoLinkError) {
+        toast.warning('卡片已建立，但自動連結暫時失敗');
+        console.error(autoLinkError);
+      }
       router.push(`/cards/${card.id}`);
     } catch (error) {
       toast.error('建立失敗');
